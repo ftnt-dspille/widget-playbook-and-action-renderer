@@ -1,0 +1,386 @@
+<!-- Copyright start
+     MIT License
+     Copyright (c) 2026 Dylan Spille
+     Copyright end -->
+<link rel="stylesheet" type="text/css"
+      href="actionRendererWidget-1.0.0/widgetAssets/css/actionRenderer.css" />
+<script src="actionRendererWidget-1.0.0/widgetAssets/js/directives.js"></script>
+
+<form data-ng-submit="save()" name="editForm" novalidate class="action-renderer-edit">
+  <!-- modal-header / modal-footer are stripped by SOAR's widget edit chrome
+       (it injects its own "Edit widget config" header and Cancel/Save
+       footer), so the stepper and Back/Next live inside .modal-body to
+       survive that wrapping. -->
+  <div class="modal-body action-renderer-body">
+    <div class="action-renderer-stepper">
+      <span data-ng-class="{ active: activeStep === 1 }" data-ng-click="gotoStep(1)">1. Source</span>
+      <span data-ng-class="{ active: activeStep === 2 }" data-ng-click="gotoStep(2)">2. Params</span>
+      <span data-ng-class="{ active: activeStep === 3 }" data-ng-click="gotoStep(3)">3. Run sample</span>
+      <span data-ng-class="{ active: activeStep === 4 }" data-ng-click="gotoStep(4)">4. Output</span>
+    </div>
+
+    <!-- Step 1: Source ------------------------------------------------- -->
+    <div data-ng-if="activeStep === 1">
+      <div class="form-group">
+        <label class="control-label">Title</label>
+        <input type="text" class="form-control" data-ng-model="config.title" placeholder="Action Renderer" />
+      </div>
+
+      <div class="form-group">
+        <label class="control-label">Source</label>
+        <div class="btn-group">
+          <button type="button" class="btn btn-default"
+                  data-ng-class="{ 'btn-primary': config.source.kind === 'connector' }"
+                  data-ng-click="config.source.kind = 'connector'; onKindChange()">
+            <i class="icon icon-connector margin-right-sm"></i>Connector action
+          </button>
+          <button type="button" class="btn btn-default"
+                  data-ng-class="{ 'btn-primary': config.source.kind === 'playbook' }"
+                  data-ng-click="config.source.kind = 'playbook'; onKindChange()">
+            <i class="icon icon-execute margin-right-sm"></i>Playbook
+          </button>
+        </div>
+      </div>
+
+      <!-- Connector subform -->
+      <div data-ng-if="config.source.kind === 'connector'">
+        <div class="form-group">
+          <label class="control-label">Connector</label>
+          <select class="form-control"
+                  data-ng-model="picks.connectorPicked"
+                  data-ng-options="c as (c.label + ' v' + c.version) for c in connectors"
+                  data-ng-change="onConnectorPicked()"
+                  data-ng-disabled="connectorListLoading">
+            <option value="">Select a connector…</option>
+          </select>
+          <div class="font-size-12 muted-65 margin-top-xs" data-ng-if="connectorListLoading">
+            Loading connectors…
+          </div>
+          <div class="font-size-12 muted-65 margin-top-xs" data-ng-if="config.source.name && !picks.connectorPicked">
+            Saved selection: <code>{{ config.source.label || config.source.name }} v{{ config.source.version }}</code>
+          </div>
+        </div>
+
+        <div class="form-group" data-ng-if="connectorDetails">
+          <label class="control-label">Operation</label>
+          <select class="form-control"
+                  data-ng-model="picks.operationPicked"
+                  data-ng-options="op as (op.title || op.operation) for op in connectorDetails.operations"
+                  data-ng-change="onOperationPicked()">
+            <option value="">Select an operation…</option>
+          </select>
+          <div class="font-size-12 muted-65 margin-top-xs" data-ng-if="config.source.operation && !picks.operationPicked">
+            Saved operation: <code>{{ config.source.operationTitle || config.source.operation }}</code>
+          </div>
+        </div>
+
+        <div class="form-group"
+             data-ng-if="connectorDetails && config.source.operation && config.source.configRequired !== false">
+          <label class="control-label">Configuration</label>
+          <select class="form-control"
+                  data-ng-model="picks.configPicked"
+                  data-ng-options="cfg.config_id as cfg.name for cfg in connectorDetails.configuration"
+                  data-ng-change="onConfigPicked()">
+            <option value="">Select a configuration…</option>
+          </select>
+          <div class="font-size-12 muted-65 margin-top-xs" data-ng-if="config.source.config && !picks.configPicked">
+            Saved configuration id: <code>{{ config.source.config }}</code>
+          </div>
+        </div>
+
+        <div class="form-group"
+             data-ng-if="connectorDetails && config.source.configRequired === false">
+          <div class="alert alert-info">No configuration required for this operation.</div>
+        </div>
+
+        <div class="form-group" data-ng-if="connectorDetails && agents.length">
+          <label class="control-label">Agent (optional)</label>
+          <select class="form-control" data-ng-model="config.agent"
+                  data-ng-options="a.agent_id as (a.name + ' (' + a.agent_version + ')') for a in agents">
+            <option value="">Self (no agent)</option>
+          </select>
+          <div class="font-size-12 muted-65 margin-top-xs">
+            Override the executor agent. Affects which configurations are reachable at run time.
+          </div>
+        </div>
+
+        <div class="form-group" data-ng-if="connectorLoading">
+          <i class="fa fa-spinner fa-spin"></i> Loading connector…
+        </div>
+      </div>
+
+      <!-- Playbook subform -->
+      <div data-ng-if="config.source.kind === 'playbook'">
+        <div class="form-group">
+          <label class="control-label">Action playbook</label>
+          <select class="form-control"
+                  data-ng-model="picks.playbookPicked"
+                  data-ng-options="pb as (pb.actionTriggerName + ' — ' + pb.collectionName) for pb in playbooks"
+                  data-ng-change="onPlaybookPicked()"
+                  data-ng-disabled="playbookListLoading">
+            <option value="">Select a playbook…</option>
+          </select>
+          <div class="font-size-12 muted-65 margin-top-xs" data-ng-if="playbookListLoading">
+            Loading playbooks…
+          </div>
+          <div class="font-size-12 muted-65 margin-top-xs" data-ng-if="config.source.uuid && !picks.playbookPicked">
+            Saved selection: <code>{{ config.source.title || config.source.name }}</code>
+          </div>
+          <div class="font-size-12 muted-65 margin-top-xs" data-ng-if="!playbookListLoading && playbooks.length === 0">
+            No action-trigger playbooks available for this module. (Edit context: a playbook's trigger module
+            must match the current record module.)
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Params ------------------------------------------------- -->
+    <div data-ng-if="activeStep === 2">
+      <div data-ng-if="!hasParams()" class="alert alert-info">
+        This {{ config.source.kind === 'connector' ? 'operation' : 'playbook' }} takes no input parameters.
+      </div>
+
+      <div class="font-size-12 muted-65 margin-bottom-md" data-ng-if="hasParams()">
+        Tip: any value can be a Jinja expression using the current record. The available context root is
+        <code ng-non-bindable>vars.input.records[0]</code>. Use the "Resolve preview" button to test.
+      </div>
+
+      <!-- Connector params: reuse SOAR's own renderer so picklists, visibility,
+           onchange chaining, and required validation all behave identically to
+           the connector configuration form. -->
+      <div data-ng-if="config.source.kind === 'connector' && connectorParamFields.length"
+           class="action-renderer-cs-fields">
+        <ng-form name="actionRendererParamForm">
+          <cs-connector-field-renderer
+            data-json-fields="connectorParamFields"
+            data-params="config.params"
+            data-cs-form="actionRendererParamForm"
+            data-connector-data="connectorDataForRenderer"
+            data-enable-jinja="true"
+            data-enable-record-fields="true">
+          </cs-connector-field-renderer>
+        </ng-form>
+      </div>
+
+      <!-- Playbook input variables: simple textarea-per-var with Jinja support. -->
+      <div data-ng-if="config.source.kind === 'playbook'">
+        <div class="form-group" data-ng-repeat="row in paramRows">
+          <label class="control-label">
+            {{ row.title }}
+            <small class="muted-65" data-ng-if="row.type">({{ row.type }})</small>
+          </label>
+          <textarea class="form-control action-renderer-param-input"
+                    rows="2"
+                    data-ng-model="config.params[row.name]"
+                    data-ng-attr-placeholder="{{ 'Value or Jinja expression for ' + row.name }}"
+                    spellcheck="false"></textarea>
+        </div>
+      </div>
+
+      <div data-ng-if="hasParams()" class="margin-top-md">
+        <button type="button" class="btn btn-default btn-sm"
+                data-ng-click="previewParams()"
+                data-ng-disabled="resolvingPreview">
+          <i class="fa fa-magic margin-right-sm" data-ng-if="!resolvingPreview"></i>
+          <i class="fa fa-spinner fa-spin margin-right-sm" data-ng-if="resolvingPreview"></i>
+          Resolve preview against current record
+        </button>
+        <pre class="action-renderer-preview margin-top-sm"
+             data-ng-if="resolvePreview">{{ resolvePreview | json }}</pre>
+      </div>
+
+    </div>
+
+    <!-- Step 3: Run sample --------------------------------------------- -->
+    <div data-ng-if="activeStep === 3">
+      <p class="font-size-13">
+        Click the button below to run this {{ config.source.kind }} once against the current record. The result
+        becomes the input for the output template in Step 4.
+      </p>
+      <button type="button" class="btn btn-primary"
+              data-ng-click="runWithCurrentRecord()"
+              data-ng-disabled="executing">
+        <i class="fa fa-play margin-right-sm" data-ng-if="!executing"></i>
+        <i class="fa fa-spinner fa-spin margin-right-sm" data-ng-if="executing"></i>
+        Run with current record
+      </button>
+      <span class="margin-left-md font-size-12 muted-65" data-ng-if="executeElapsedMs !== null && !executing">
+        Completed in {{ executeElapsedMs }} ms
+      </span>
+
+      <div class="alert alert-danger margin-top-md" data-ng-if="lastExecutionError">
+        {{ lastExecutionError }}
+      </div>
+
+      <div class="margin-top-md" data-ng-if="executedSample !== null">
+        <label class="control-label">Sample output</label>
+        <pre class="action-renderer-sample">{{ executedSample | json }}</pre>
+      </div>
+    </div>
+
+    <!-- Step 4: Output ------------------------------------------------- -->
+    <div data-ng-if="activeStep === 4">
+      <div class="form-group">
+        <label class="control-label">Output mode</label>
+        <ul class="nav nav-pills">
+          <li data-ng-class="{ active: config.output.mode === 'raw' }">
+            <a href="" data-ng-click="config.output.mode = 'raw'">Raw JSON</a>
+          </li>
+          <li data-ng-class="{ active: config.output.mode === 'table' }">
+            <a href="" data-ng-click="config.output.mode = 'table'">Table</a>
+          </li>
+          <li data-ng-class="{ active: config.output.mode === 'jinja' }">
+            <a href="" data-ng-click="config.output.mode = 'jinja'">Jinja template</a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Raw -->
+      <div data-ng-if="config.output.mode === 'raw'">
+        <p class="font-size-13 muted-65">
+          The raw response will be rendered as a pretty-printed JSON block on the view panel.
+        </p>
+      </div>
+
+      <!-- Table -->
+      <div data-ng-if="config.output.mode === 'table'">
+        <div class="form-group">
+          <label class="control-label">Root path into the result</label>
+          <input type="text" class="form-control"
+                 data-ng-model="config.output.table.rootPath"
+                 placeholder="e.g. data.hits or leave blank for the whole result" />
+          <div class="font-size-12 muted-65 margin-top-xs">
+            Dotted/bracket path resolved against the executed sample. Click any value below to copy its path.
+          </div>
+        </div>
+
+        <div class="alert alert-warning"
+             data-ng-if="!executedSample"
+             data-ng-bind="'Run a sample (Step 3) to choose a path interactively.'"></div>
+
+        <div data-ng-if="executedSample" class="action-renderer-tree-wrap">
+          <div class="font-size-12 muted-65 margin-bottom-xs">
+            Status:
+            <span data-ng-switch="tablePathStatus().kind">
+              <span data-ng-switch-when="array" class="text-success">
+                array of {{ tablePathStatus().count }} item(s){{ tablePathStatus().sampleKeys.length ? ' — keys: ' + tablePathStatus().sampleKeys.join(', ') : '' }}
+              </span>
+              <span data-ng-switch-when="object" class="text-info">object — keys: {{ tablePathStatus().keys.join(', ') }}</span>
+              <span data-ng-switch-when="primitive" class="text-info">primitive: {{ tablePathStatus().value }}</span>
+              <span data-ng-switch-when="missing" class="text-danger">path not found in sample</span>
+              <span data-ng-switch-default="" class="muted-65">no sample</span>
+            </span>
+          </div>
+          <pre class="action-renderer-sample">{{ executedSample | json }}</pre>
+        </div>
+
+        <div class="form-group margin-top-md">
+          <label class="control-label">Table mode</label>
+          <select class="form-control" data-ng-model="config.output.table.mode">
+            <option value="auto">Auto — infer columns from row keys</option>
+            <option value="columns">Explicit columns</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="control-label">Style preset</label>
+          <select class="form-control"
+                  data-ng-model="config.output.table.style"
+                  data-ng-init="config.output.table.style = config.output.table.style || 'striped'">
+            <option value="striped">Striped — alternating row tint (default)</option>
+            <option value="plain">Plain — minimal divider lines</option>
+            <option value="bordered">Bordered — full grid</option>
+            <option value="compact">Compact — dense rows for log-like data</option>
+            <option value="card">Card — each row as a panel</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-inline">
+            <input type="checkbox" data-ng-model="config.output.table.stickyHeader" />
+            Sticky header (scroll body, header stays visible)
+          </label>
+        </div>
+
+        <div data-ng-if="config.output.table.mode === 'columns'">
+          <div class="display-flex-space-between margin-bottom-sm">
+            <label class="control-label margin-bottom-0">Columns</label>
+            <div>
+              <button type="button" class="btn btn-default btn-xs margin-right-sm"
+                      data-ng-click="autoFillColumns()"
+                      data-ng-disabled="!executedSample">
+                Auto-fill from sample
+              </button>
+              <button type="button" class="btn btn-default btn-xs" data-ng-click="addColumn()">
+                <i class="fa fa-plus margin-right-sm"></i>Add column
+              </button>
+            </div>
+          </div>
+          <table class="table table-condensed action-renderer-cols">
+            <thead>
+              <tr><th>Path (relative to root)</th><th>Header</th><th>Align</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr data-ng-repeat="col in config.output.table.columns">
+                <td><input type="text" class="form-control input-sm" data-ng-model="col.path" placeholder="name" /></td>
+                <td><input type="text" class="form-control input-sm" data-ng-model="col.header" placeholder="Display header" /></td>
+                <td>
+                  <select class="form-control input-sm" data-ng-model="col.align">
+                    <option value="">auto</option>
+                    <option value="left">left</option>
+                    <option value="center">center</option>
+                    <option value="right">right</option>
+                  </select>
+                </td>
+                <td>
+                  <button type="button" class="btn btn-link btn-sm text-danger"
+                          data-ng-click="removeColumn($index)"
+                          title="Remove column">
+                    <i class="fa fa-times"></i>
+                  </button>
+                </td>
+              </tr>
+              <tr data-ng-if="!config.output.table.columns.length">
+                <td colspan="4" class="text-center muted-65">No columns yet — add one or auto-fill from sample.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Jinja -->
+      <div data-ng-if="config.output.mode === 'jinja'">
+        <p class="font-size-13 muted-65">
+          The executed sample is the input. Reference it as
+          <code ng-non-bindable>vars.input.result</code> (and the record as
+          <code ng-non-bindable>vars.input.records[0]</code>).
+        </p>
+        <div class="action-renderer-jinja-pane"
+             data-action-renderer-jinja-pane=""
+             data-seed-input="jinjaPaneSeed"
+             data-template="config.output.jinjaTemplate">
+          <div class="alert alert-info">
+            Loading inline Jinja editor…
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <div class="action-renderer-nav">
+      <button type="button" class="btn btn-default"
+              data-ng-click="gotoStep(activeStep - 1)"
+              data-ng-disabled="activeStep === 1">
+        <i class="fa fa-arrow-left margin-right-sm"></i>Back
+      </button>
+      <button type="button" class="btn btn-primary"
+              data-ng-click="gotoStep(activeStep + 1)"
+              data-ng-disabled="activeStep === 4 || !canAdvance(activeStep)">
+        Next<i class="fa fa-arrow-right margin-left-sm"></i>
+      </button>
+      <span class="action-renderer-nav-hint muted-65" data-ng-if="!canAdvance(activeStep) && activeStep < 4">
+        Complete this step to continue.
+      </span>
+    </div>
+  </div>
+</form>

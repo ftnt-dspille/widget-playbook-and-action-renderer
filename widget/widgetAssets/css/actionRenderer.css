@@ -1,0 +1,250 @@
+/* Copyright start
+   MIT License
+   Copyright (c) 2026 Dylan Spille
+   Copyright end */
+
+/* ---- Edit modal ---------------------------------------------------- */
+.action-renderer-edit .action-renderer-stepper {
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  font-size: 12px;
+  color: #888;
+  border-bottom: 1px solid rgba(127,127,127,0.25);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.action-renderer-edit .action-renderer-nav {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(127,127,127,0.25);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.action-renderer-edit .action-renderer-nav-hint {
+  font-size: 12px;
+}
+.action-renderer-edit .action-renderer-stepper > span {
+  margin-right: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.action-renderer-edit .action-renderer-stepper > span.active {
+  color: #fff;
+  background: #337ab7;
+  font-weight: 500;
+}
+
+.action-renderer-body {
+  min-height: 320px;
+}
+
+/* cs-field inputs inside the cs-connector-field-renderer occasionally render
+   as zero-height bars when SOAR's form-control sizing rules don't reach the
+   harness DOM (theme stylesheet load order). Force a sane minimum so the
+   inputs are always usable. */
+.action-renderer-cs-fields input.form-control,
+.action-renderer-cs-fields select.form-control,
+.action-renderer-cs-fields textarea.form-control {
+  min-height: 32px;
+  padding: 6px 10px;
+  line-height: 1.4;
+}
+
+.action-renderer-param-input {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.action-renderer-preview,
+.action-renderer-sample {
+  background: rgba(127, 127, 127, 0.08);
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  padding: 8px;
+  border-radius: 3px;
+  max-height: 260px;
+  overflow: auto;
+  font-size: 12px;
+}
+
+.action-renderer-tree-wrap pre {
+  user-select: text;
+}
+
+.action-renderer-cols td input {
+  font-family: monospace;
+}
+
+/* ---- Inline Jinja pane (in edit step 4) ---------------------------- */
+.action-renderer-jinja-pane {
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 4px;
+  padding: 12px;
+  background: rgba(127, 127, 127, 0.03);
+}
+
+.action-renderer-jinja-input,
+.action-renderer-jinja-output {
+  background: rgba(127, 127, 127, 0.08);
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  padding: 8px;
+  border-radius: 3px;
+  height: 320px;
+  overflow: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.action-renderer-jinja-output.has-error {
+  border-color: #c9302c;
+  color: #c9302c;
+}
+.action-renderer-jinja-template {
+  font-family: monospace;
+  font-size: 12px;
+  height: 320px;
+  resize: vertical;
+}
+.action-renderer-jinja-tabs {
+  margin: 0;
+}
+.action-renderer-jinja-tabs > li > a {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.action-renderer-html-frame,
+.action-renderer-jinja-output-html .action-renderer-html-frame {
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 3px;
+  width: 100%;
+  height: 320px;
+  background: #fff;
+}
+
+/* ---- View panel ---------------------------------------------------- */
+.action-renderer-result-raw {
+  background: rgba(127, 127, 127, 0.06);
+  border: 1px solid rgba(127, 127, 127, 0.18);
+  padding: 10px;
+  border-radius: 3px;
+  font-size: 12px;
+  max-height: 600px;
+  overflow: auto;
+}
+
+.action-renderer-widget {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.action-renderer-widget .action-renderer-body {
+  min-width: 0;
+}
+/* Many connector responses produce tables wider than the SOAR view panel
+   (which is ~880px by default). Without this wrapper the <table> overflows
+   the widget's parent and visually pushes content off-center. Constrain to
+   the widget width and scroll horizontally. */
+.action-renderer-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  max-height: 600px;
+  overflow-x: auto;
+  overflow-y: auto;
+  border-radius: 4px;
+  padding-bottom: 12px;
+}
+.action-renderer-table-wrap.action-renderer-table-sticky {
+  /* sticky preset just enables thead pinning; height/scroll is shared. */
+}
+.action-renderer-table-wrap.action-renderer-table-sticky thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(40, 40, 40, 0.96);
+  backdrop-filter: blur(2px);
+}
+.action-renderer-body { padding-bottom: 16px; }
+.action-renderer-table {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+  margin: 0;
+}
+.action-renderer-table thead th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.35);
+  white-space: nowrap;
+}
+.action-renderer-table tbody td {
+  padding: 8px 12px;
+  vertical-align: top;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid rgba(127, 127, 127, 0.15);
+}
+.action-renderer-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.action-renderer-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* ---- Style presets ---- */
+/* striped (default) */
+.action-renderer-table-style-striped tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.025);
+}
+/* plain — minimal lines, breathing room */
+.action-renderer-table-style-plain .action-renderer-table tbody td,
+.action-renderer-table-style-plain .action-renderer-table thead th {
+  border-bottom-color: rgba(127, 127, 127, 0.10);
+}
+/* bordered — full grid */
+.action-renderer-table-style-bordered .action-renderer-table {
+  border: 1px solid rgba(127, 127, 127, 0.30);
+}
+.action-renderer-table-style-bordered .action-renderer-table th,
+.action-renderer-table-style-bordered .action-renderer-table td {
+  border: 1px solid rgba(127, 127, 127, 0.20);
+}
+/* compact — denser rows for log-like data */
+.action-renderer-table-style-compact .action-renderer-table thead th { padding: 6px 8px; font-size: 10px; }
+.action-renderer-table-style-compact .action-renderer-table tbody td { padding: 4px 8px; font-size: 12px; }
+/* card — each row floats as a panel */
+.action-renderer-table-style-card .action-renderer-table { border-collapse: separate; border-spacing: 0 8px; }
+.action-renderer-table-style-card .action-renderer-table tbody tr td {
+  background: rgba(255, 255, 255, 0.04);
+  border-top: 1px solid rgba(127, 127, 127, 0.20);
+  border-bottom: 1px solid rgba(127, 127, 127, 0.20);
+}
+.action-renderer-table-style-card .action-renderer-table tbody tr td:first-child {
+  border-left: 1px solid rgba(127, 127, 127, 0.20);
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+.action-renderer-table-style-card .action-renderer-table tbody tr td:last-child {
+  border-right: 1px solid rgba(127, 127, 127, 0.20);
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+/* Light theme parity */
+body.theme-light .action-renderer-table thead th,
+body.theme-navy .action-renderer-table thead th { color: rgba(0, 0, 0, 0.7); }
+body.theme-light .action-renderer-table tbody td { color: rgba(0, 0, 0, 0.85); }
+body.theme-light .action-renderer-table-wrap.action-renderer-table-sticky thead th {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.action-renderer-jinja-rendered .action-renderer-html-frame {
+  height: 600px;
+}

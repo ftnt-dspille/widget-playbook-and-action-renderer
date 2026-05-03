@@ -1,0 +1,33 @@
+{
+  "name": "actionRendererWidget",
+  "title": "Action Renderer",
+  "subTitle": "Run a connector action or playbook with Jinja-templated params and render the output as raw JSON, a table, or a Jinja template.",
+  "version": "1.0.0",
+  "published_date": 1745280000,
+  "releaseNotes": "Initial release",
+  "development": true,
+  "metadata": {
+    "description": "Configure a connector action or playbook on the edit panel; the widget executes it on the view panel against the current record (params can use Jinja for record-aware values) and renders the output as raw JSON, a table you shape with a JSON-path picker, or HTML produced by an inline Jinja template.",
+    "publisher": "Dylan Spille",
+    "certified": "No",
+    "compatibility": [
+      "7.4.0",
+      "7.4.1",
+      "7.6.0",
+      "7.6.5"
+    ],
+    "snapshots": [],
+    "category": [
+      "Utilities",
+      "Connectors",
+      "Playbooks"
+    ],
+    "pages": [
+      "View Panel",
+      "Dashboard"
+    ],
+    "standalone": false,
+    "windowClass": "Full Width",
+    "size": "lg"
+  }
+}

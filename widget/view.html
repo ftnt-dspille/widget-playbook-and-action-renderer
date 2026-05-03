@@ -1,0 +1,92 @@
+<!-- Copyright start
+     MIT License
+     Copyright (c) 2026 Dylan Spille
+     Copyright end -->
+<link rel="stylesheet" type="text/css"
+      href="actionRendererWidget-1.0.0/widgetAssets/css/actionRenderer.css" />
+<script src="actionRendererWidget-1.0.0/widgetAssets/js/directives.js"></script>
+
+<!-- See jinja editor view.html for why we don't put data-ng-controller here.
+     The dev harness wraps with its own ng-controller; published SOAR strips
+     the `Dev` suffix and instantiates by name on the compile scope. -->
+<div class="widget-container action-renderer-widget">
+  <div class="display-flex-space-between margin-chart padding-left-lg padding-right-lg padding-top-sm">
+    <h5 class="margin-top-0 margin-bottom-0 text-overflow"
+        data-ng-if="config.title">
+      {{ config.title }}
+      <small class="muted-65 font-size-12 margin-left-sm" data-ng-if="widgetVersion">v{{ widgetVersion }}</small>
+    </h5>
+    <div>
+      <button type="button" class="btn btn-default btn-sm"
+              data-ng-click="refresh()"
+              data-ng-disabled="loading">
+        <i class="fa fa-refresh margin-right-sm" data-ng-if="!loading"></i>
+        <i class="fa fa-spinner fa-spin margin-right-sm" data-ng-if="loading"></i>
+        Run
+      </button>
+    </div>
+  </div>
+
+  <div class="action-renderer-body padding-left-lg padding-right-lg padding-bottom-lg">
+    <div class="alert alert-warning"
+         data-ng-if="!config.source || !config.source.kind">
+      Open the widget editor to choose a connector action or playbook.
+    </div>
+
+    <div class="alert alert-danger" data-ng-if="error">{{ error }}</div>
+
+    <div data-ng-if="loading && !error" class="text-center muted-65 padding-top-lg">
+      <i class="fa fa-spinner fa-spin margin-right-sm"></i>
+      Running {{ config.source.kind }}…
+    </div>
+
+    <!-- Raw -->
+    <div data-ng-if="!loading && result !== null && outputMode === 'raw'">
+      <pre class="action-renderer-result-raw">{{ resultJsonText }}</pre>
+    </div>
+
+    <!-- Table -->
+    <div data-ng-if="!loading && result !== null && outputMode === 'table'"
+         data-ng-class="['action-renderer-table-wrap',
+                          'action-renderer-table-style-' + (config.output.table.style || 'striped'),
+                          { 'action-renderer-table-sticky': config.output.table.stickyHeader }]">
+      <table class="action-renderer-table"
+             data-ng-if="tableHeaders.length">
+        <thead>
+          <tr>
+            <th data-ng-repeat="h in tableHeaders track by $index"
+                data-ng-style="{ 'text-align': (tableColumnAlign($index) || 'left') }">
+              {{ h }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-ng-repeat="row in tableRows track by $index">
+            <td data-ng-repeat="cell in row track by $index"
+                data-ng-style="{ 'text-align': (tableColumnAlign($index) || 'left') }">
+              {{ cell }}
+            </td>
+          </tr>
+          <tr data-ng-if="!tableRows.length">
+            <td data-ng-attr-colspan="{{ tableHeaders.length }}" class="text-center muted-65">
+              {{ config.output.table.emptyMessage || 'No rows' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="alert alert-warning" data-ng-if="!tableHeaders.length">
+        Path <code>{{ config.output.table.rootPath || '(root)' }}</code> did not resolve to a value in the result.
+      </div>
+    </div>
+
+    <!-- Jinja -->
+    <div data-ng-if="!loading && result !== null && outputMode === 'jinja'">
+      <div class="action-renderer-jinja-rendered"
+           data-action-renderer-html-preview="renderedHtml"
+           data-ng-if="renderedHtml !== null"></div>
+      <div class="muted-65 font-size-12 margin-top-sm" data-ng-if="!config.output.jinjaTemplate">
+        No Jinja template configured. Edit the widget to add one.
+      </div>
+    </div>
+  </div>
+</div>
