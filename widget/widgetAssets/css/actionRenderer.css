@@ -64,9 +64,17 @@
   border: 1px solid rgba(127, 127, 127, 0.2);
   padding: 8px;
   border-radius: 3px;
+  max-width: 100%;
   max-height: 260px;
   overflow: auto;
   font-size: 12px;
+  /* Wide connector responses (large/nested JSON) must wrap, not blow the
+     modal width out to the right. Without this a single long line forces the
+     <pre> wider than .modal-body and the content visually overflows off the
+     right edge ("data overflowing to bottom and right"). */
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .action-renderer-tree-wrap pre {
@@ -131,17 +139,30 @@
   padding: 10px;
   border-radius: 3px;
   font-size: 12px;
+  max-width: 100%;
   max-height: 600px;
   overflow: auto;
+  /* Same wrap discipline as the edit-modal sample: long JSON lines wrap to the
+     widget width instead of pushing the view-panel content off to the right. */
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .action-renderer-widget {
   width: 100%;
   max-width: 100%;
+  /* min-width:0 lets the widget shrink inside a flex/grid dashboard cell;
+     without it a wide inner table sets the widget's min-content width and the
+     whole widget overflows its parent track. overflow-x:hidden makes the inner
+     .action-renderer-table-wrap the ONLY horizontal scroller. */
+  min-width: 0;
+  overflow-x: hidden;
   box-sizing: border-box;
 }
 .action-renderer-widget .action-renderer-body {
   min-width: 0;
+  max-width: 100%;
 }
 /* Many connector responses produce tables wider than the SOAR view panel
    (which is ~880px by default). Without this wrapper the <table> overflows
@@ -248,3 +269,92 @@ body.theme-light .action-renderer-table-wrap.action-renderer-table-sticky thead 
 .action-renderer-jinja-rendered .action-renderer-html-frame {
   height: 600px;
 }
+
+/* ----- ui-select dropdown — playbook picker -------------------------------
+ * SOAR's dark theme leaves ui-select-choices with low-contrast defaults
+ * (selected row hot-cyan, idle rows muted gray), so these rules restyle it.
+ *
+ * NOTE: we deliberately do NOT use `data-append-to-body="true"`. ui-select
+ * 0.20.0's appendToBody moves the WHOLE `.ui-select-container` into <body>
+ * while open and relies on a placeholder + `placeholder.replaceWith(element)`
+ * on close to restore it. Inside SOAR's widget edit modal that restore fails:
+ * on select the container is left stranded as a direct child of <body> and the
+ * placeholder stays in the modal, so the picker visually disappears the moment
+ * you pick a playbook. We keep the dropdown in-place (z-index lifts it over the
+ * modal chrome) — the picker sits near the top of the subform so it has room to
+ * open downward without clipping. The dropdown is no longer body-attached, but
+ * these rules still target `.ui-select-bootstrap` globally; no other widget in
+ * this repo uses ui-select, so the global scope is safe. */
+.action-renderer-edit .ui-select-bootstrap > .ui-select-match > .btn,
+.action-renderer-edit .ui-select-bootstrap .ui-select-search {
+  color: inherit;
+  background-color: rgba(255, 255, 255, 0.04);
+  border-color: rgba(127, 127, 127, 0.35);
+}
+.ui-select-bootstrap > .ui-select-choices {
+  max-height: 320px;
+  overflow-y: auto;
+  background-color: #1d2330;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  /* Just enough to overlay the form-groups below the picker. NOT a modal-level
+     z-index: at 1100 (global, above bootstrap's 1050 modal) the open dropdown
+     painted over SOAR's injected modal header — covering the × exit/close
+     button ("exit button is gone"). The .ui-select-container below creates a
+     local stacking context, so this value is scoped to the picker's siblings
+     and can never escape over the modal chrome. */
+  z-index: 5;
+}
+body.theme-light .ui-select-bootstrap > .ui-select-choices {
+  background-color: #ffffff;
+  color: rgba(0, 0, 0, 0.85);
+}
+/* ui-select 0.20.0 renders each row as
+ *   <li.ui-select-choices-row><div.ui-select-choices-row-inner>{template}</div></li>
+ * Bootstrap theme styles target `.ui-select-choices-row-inner` directly. Match
+ * its selector structure (and bump with !important) so we win the cascade. */
+.ui-select-bootstrap > .ui-select-choices .ui-select-choices-row-inner,
+.ui-select-bootstrap .ui-select-choices-row > a,
+.ui-select-bootstrap .ui-select-choices-row > span {
+  color: rgba(255, 255, 255, 0.92) !important;
+  background-color: transparent !important;
+  padding: 6px 12px;
+}
+.ui-select-bootstrap .ui-select-choices-row .ui-select-choices-row-inner * {
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+body.theme-light .ui-select-bootstrap > .ui-select-choices .ui-select-choices-row-inner,
+body.theme-light .ui-select-bootstrap .ui-select-choices-row > a,
+body.theme-light .ui-select-bootstrap .ui-select-choices-row .ui-select-choices-row-inner * {
+  color: rgba(0, 0, 0, 0.88) !important;
+}
+.ui-select-bootstrap > .ui-select-choices .active > .ui-select-choices-row-inner,
+.ui-select-bootstrap .ui-select-choices-row.active > a,
+.ui-select-bootstrap .ui-select-choices-row:hover > .ui-select-choices-row-inner,
+.ui-select-bootstrap .ui-select-choices-row:hover > a {
+  background-color: rgba(78, 154, 241, 0.28) !important;
+  color: #ffffff !important;
+}
+.ui-select-bootstrap > .ui-select-choices .active .ui-select-choices-row-inner *,
+.ui-select-bootstrap .ui-select-choices-row:hover .ui-select-choices-row-inner * {
+  color: #ffffff !important;
+}
+body.theme-light .ui-select-bootstrap > .ui-select-choices .active > .ui-select-choices-row-inner,
+body.theme-light .ui-select-bootstrap .ui-select-choices-row.active > a,
+body.theme-light .ui-select-bootstrap .ui-select-choices-row:hover > .ui-select-choices-row-inner {
+  background-color: rgba(78, 154, 241, 0.18) !important;
+  color: rgba(0, 0, 0, 0.9) !important;
+}
+.ui-select-bootstrap .ui-select-choices-row .highlight {
+  background-color: rgba(255, 217, 0, 0.35);
+  color: inherit;
+  font-weight: 600;
+}
+
+/* Belt-and-suspenders: even with append-to-body, allow the body to render
+ * any inline overlays (browsers vary on how they treat <ui-select> when the
+ * parent has overflow:hidden mid-animation). */
+.action-renderer-edit .action-renderer-body { overflow: visible; }
+/* A low, non-auto z-index makes the container a local stacking context, so the
+ * open dropdown's z-index is resolved among THESE siblings and cannot rise over
+ * the modal header (which holds the × exit button). */
+.action-renderer-edit .form-group .ui-select-container { position: relative; z-index: 1; }

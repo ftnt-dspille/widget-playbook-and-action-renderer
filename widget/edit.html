@@ -3,8 +3,8 @@
      Copyright (c) 2026 Dylan Spille
      Copyright end -->
 <link rel="stylesheet" type="text/css"
-      href="actionRendererWidget-1.0.0/widgetAssets/css/actionRenderer.css" />
-<script src="actionRendererWidget-1.0.0/widgetAssets/js/directives.js"></script>
+      href="actionRendererWidget-1.0.5/widgetAssets/css/actionRenderer.css" />
+<script src="actionRendererWidget-1.0.5/widgetAssets/js/directives.js"></script>
 
 <form data-ng-submit="save()" name="editForm" novalidate class="action-renderer-edit">
   <!-- modal-header / modal-footer are stripped by SOAR's widget edit chrome
@@ -113,13 +113,29 @@
       <div data-ng-if="config.source.kind === 'playbook'">
         <div class="form-group">
           <label class="control-label">Action playbook</label>
-          <select class="form-control"
-                  data-ng-model="picks.playbookPicked"
-                  data-ng-options="pb as (pb.actionTriggerName + ' — ' + pb.collectionName) for pb in playbooks"
-                  data-ng-change="onPlaybookPicked()"
-                  data-ng-disabled="playbookListLoading">
-            <option value="">Select a playbook…</option>
-          </select>
+          <div class="margin-bottom-xs" data-ng-if="!isDashboardContext">
+            <label class="font-size-12">
+              <input type="checkbox"
+                     data-ng-model="showAllPlaybooks"
+                     data-ng-change="onPlaybookScopeToggle()"/>
+              Show all playbooks (not just ones runnable from this module)
+            </label>
+          </div>
+          <div class="font-size-12 muted-65 margin-bottom-xs" data-ng-if="isDashboardContext">
+            Showing all action-trigger playbooks (no record context on dashboards).
+          </div>
+          <ui-select data-ng-model="picks.playbookPicked"
+                     data-on-select="onPlaybookPicked()"
+                     data-ng-disabled="playbookListLoading"
+                     theme="bootstrap">
+            <ui-select-match placeholder="Search and select a playbook…">
+              {{ $select.selected.actionTriggerName }}<span data-ng-if="$select.selected.collectionName" class="muted-65"> — {{ $select.selected.collectionName }}</span>
+            </ui-select-match>
+            <ui-select-choices data-repeat="pb in playbooks | filter: { $: $select.search }">
+              <div data-ng-bind-html="pb.actionTriggerName | highlight: $select.search"></div>
+              <small class="muted-65" data-ng-if="pb.collectionName" data-ng-bind-html="pb.collectionName | highlight: $select.search"></small>
+            </ui-select-choices>
+          </ui-select>
           <div class="font-size-12 muted-65 margin-top-xs" data-ng-if="playbookListLoading">
             Loading playbooks…
           </div>

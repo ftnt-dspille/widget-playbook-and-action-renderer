@@ -13,7 +13,7 @@ angular.module("cybersponse", []); // eslint-disable-line no-undef
 
 require("../widget/edit.controller.js");
 
-const CTRL_NAME = "editActionRendererWidget100DevCtrl";
+const CTRL_NAME = "editActionRendererWidget105DevCtrl";
 
 const ng = window.angular; // eslint-disable-line no-undef
 const ngModule = window.angular.mock.module; // eslint-disable-line no-undef
@@ -58,6 +58,10 @@ beforeEach(() => {
     }));
     $provide.factory("$resource", (_$q_) => () => ({
       save: jest.fn(() => ({ $promise: _$q_.when({}) })),
+      // loadAllPlaybooks (dashboard branch) uses .get; default to an empty
+      // hydra collection so controller bootstrap doesn't blow up in tests
+      // that don't override the playbook listing.
+      get: jest.fn(() => ({ $promise: _$q_.when({ "hydra:member": [] }) })),
     }));
     // Stub lodash — the edit controller injects `_` but the paths exercised
     // here (source picker, params, table-shaping, modal lifecycle) don't call
@@ -172,7 +176,18 @@ describe("edit controller — initialization", () => {
       config: { source: { kind: "playbook" } },
       services: { playbookService, FormEntityService },
     });
-    expect(scope.playbooks).toEqual([pb]);
+    // decorateForDropdown returns lean plain objects (same path for module-
+    // scoped and "all" lists) carrying the picker fields.
+    expect(scope.playbooks).toEqual([
+      {
+        uuid: "u1",
+        "@id": "/api/3/workflows/u1",
+        name: "Run X",
+        steps: pb.steps,
+        actionTriggerName: "Run X",
+        collectionName: "",
+      },
+    ]);
   });
 });
 
@@ -291,6 +306,139 @@ describe("playbook flow", () => {
     expect(scope.paramRows.length).toBe(2);
     expect(scope.paramRows[0].title).toBe("Name");
   });
+
+  test("onPlaybookPicked derives the trigger from steps when playbookService has no getTriggerStep", () => {
+    // Mirrors the live "Show all" environment: playbookService either isn't
+    // registered or doesn't expose getTriggerStep (it transitively needs
+    // websocket/$stomp). The pick must still populate config.source from the
+    // playbook's own decorated steps rather than no-oping.
+    const pb = {
+      uuid: "u9",
+      "@id": "/api/3/workflows/u9",
+      name: "Enrich Indicator",
+      steps: [{
+        arguments: {
+          title: "Enrich Indicator",
+          route: "enrich/9",
+          singleRecordExecution: false,
+          inputVariables: [{ name: "indicator", type: "text", label: "Indicator" }],
+        },
+      }],
+    };
+    // No getTriggerStep on this service → forces the step-derived fallback.
+    const playbookService = {
+      getActionPlaybooks: jest.fn(() => $q.when([pb])),
+      checkPlaybookExecutionCompletion: jest.fn(),
+      getExecutedPlaybookLogData: jest.fn(() => $q.when({ result: null })),
+    };
+    const { scope } = createCtrl({
+      config: { source: { kind: "playbook" } },
+      services: { playbookService },
+    });
+    scope.picks.playbookPicked = pb;
+    scope.onPlaybookPicked();
+    expect(scope.config.source.kind).toBe("playbook");
+    expect(scope.config.source.uuid).toBe("u9");
+    expect(scope.config.source.route).toBe("enrich/9");
+    expect(scope.config.source.singleRecordExecution).toBe(false);
+    expect(scope.config.source.inputVariables.length).toBe(1);
+    expect(scope.paramRows.length).toBe(1);
+    expect(scope.paramRows[0].name).toBe("indicator");
+  });
+
+  test("onPlaybookPicked finds the trigger step even when it is not steps[0]", () => {
+    // A multi-step action playbook: the trigger (carrying route/inputVariables)
+    // may not be the first step. The fallback scans for the step with
+    // arguments.route / inputVariables before defaulting to steps[0].
+    const pb = {
+      uuid: "u10",
+      "@id": "/api/3/workflows/u10",
+      name: "Multi Step",
+      steps: [
+        { arguments: { name: "Set Vars" } },
+        { arguments: { title: "Trigger", route: "multi/10", inputVariables: [{ name: "ip", type: "text" }] } },
+      ],
+    };
+    const playbookService = { getActionPlaybooks: jest.fn(() => $q.when([pb])) };
+    const { scope } = createCtrl({
+      config: { source: { kind: "playbook" } },
+      services: { playbookService },
+    });
+    scope.picks.playbookPicked = pb;
+    scope.onPlaybookPicked();
+    expect(scope.config.source.route).toBe("multi/10");
+    expect(scope.config.source.inputVariables.length).toBe(1);
+    expect(scope.config.source.inputVariables[0].name).toBe("ip");
+  });
+
+  test("playbook required input variables gate step 2 (read from config.params, seed defaultValue)", () => {
+    const pb = {
+      uuid: "u11",
+      "@id": "/api/3/workflows/u11",
+      name: "Block Domain",
+      steps: [{
+        arguments: {
+          title: "Block Domain",
+          route: "block/11",
+          inputVariables: [
+            { name: "domain", type: "string", label: "Domain", required: true },
+            { name: "reason", type: "string", label: "Reason", required: false, defaultValue: "Malicious" },
+          ],
+        },
+      }],
+    };
+    const playbookService = { getActionPlaybooks: jest.fn(() => $q.when([pb])) };
+    const { scope } = createCtrl({
+      config: { source: { kind: "playbook" } },
+      services: { playbookService },
+    });
+    scope.picks.playbookPicked = pb;
+    scope.onPlaybookPicked();
+    // required flag propagates to the row; defaultValue seeds config.params.
+    const domainRow = scope.paramRows.find((r) => r.name === "domain");
+    expect(domainRow.required).toBe(true);
+    expect(scope.config.params.reason).toBe("Malicious");
+    // required-but-empty 'domain' must block advancing past step 2.
+    expect(scope.canAdvance(2)).toBe(false);
+    scope.config.params.domain = "evil.example";
+    expect(scope.canAdvance(2)).toBe(true);
+  });
+
+  test("onPlaybookPicked tags an action-trigger playbook triggerType=action", () => {
+    const pb = {
+      uuid: "ua", "@id": "/api/3/workflows/ua", name: "Action PB",
+      steps: [{ arguments: { title: "Act", route: "act/1" } }],
+    };
+    const { scope } = createCtrl({
+      config: { source: { kind: "playbook" } },
+      services: { playbookService: { getActionPlaybooks: jest.fn(() => $q.when([pb])) } },
+    });
+    scope.picks.playbookPicked = pb;
+    scope.onPlaybookPicked();
+    expect(scope.config.source.triggerType).toBe("action");
+    expect(scope.config.source.route).toBe("act/1");
+  });
+
+  test("onPlaybookPicked tags a generic/manual Start-trigger playbook triggerType=manual (no route)", () => {
+    // Mirrors "query critical": a Start trigger with triggerOnSource and NO
+    // action route → must be fired via /api/triggers/1/notrigger/<uuid>.
+    const pb = {
+      uuid: "9ce6f46f", "@id": "/api/3/workflows/9ce6f46f", name: "query critical",
+      steps: [{
+        name: "Start",
+        arguments: { __triggerLimit: null, triggerOnSource: true, triggerOnReplicate: false },
+      }],
+    };
+    const { scope } = createCtrl({
+      config: { source: { kind: "playbook" } },
+      services: { playbookService: { getActionPlaybooks: jest.fn(() => $q.when([pb])) } },
+    });
+    scope.picks.playbookPicked = pb;
+    scope.onPlaybookPicked();
+    expect(scope.config.source.triggerType).toBe("manual");
+    expect(scope.config.source.route).toBeUndefined();
+    expect(scope.config.source.uuid).toBe("9ce6f46f");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -391,6 +539,21 @@ describe("table-shaping helpers", () => {
     expect(scope.resolvePath(obj, "")).toEqual({ found: true, value: obj });
   });
 
+  test("resolvePath auto-descends a single-element wrapper array on a key path", () => {
+    const { scope } = createCtrl();
+    // Mirrors the live FortiGate shape: result is a 1-element array wrapping the
+    // payload. "result.data" should reach into the lone element (no explicit [0]).
+    const obj = { data: { gui_response: { result: [{ data: [{ name: "root" }, { name: "test" }] }] } } };
+    const r = scope.resolvePath(obj, "data.gui_response.result.data");
+    expect(r.found).toBe(true);
+    expect(r.value).toEqual([{ name: "root" }, { name: "test" }]);
+    // The explicit-index form still works and is equivalent.
+    expect(scope.resolvePath(obj, "data.gui_response.result[0].data")).toEqual(r);
+    // A MULTI-element array is ambiguous → not auto-descended on a key path.
+    const multi = { rows: [{ a: 1 }, { a: 2 }] };
+    expect(scope.resolvePath(multi, "rows.a")).toEqual({ found: false });
+  });
+
   test("tablePathStatus reports array vs object vs missing", () => {
     const { scope } = createCtrl();
     scope.executedSample = { rows: [{ a: 1, b: 2 }, { a: 3, b: 4 }], one: { x: 1 }, lit: "hi" };
@@ -475,6 +638,116 @@ describe("modal lifecycle", () => {
 
 // ---------------------------------------------------------------------------
 
+describe("dashboard playbook listing", () => {
+  // On a dashboard there is no FormEntity record and no $state module param.
+  // The legacy `loadPlaybookList` would early-return with an empty list and
+  // the user could never pick a playbook. Verify the controller flips into
+  // dashboard mode and uses the all-playbooks $resource path instead.
+  test("isDashboardContext=true forces showAllPlaybooks and lists ALL active playbooks via /api/3/workflows", () => {
+    const allList = [
+      { uuid: "p1", "@id": "/api/3/workflows/p1", name: "PB1", steps: [{ arguments: { title: "PB One", route: "r1" } }] },
+      { uuid: "p2", "@id": "/api/3/workflows/p2", name: "PB2", steps: [{ arguments: { title: "PB Two", route: "r2" } }] },
+    ];
+    const resourceGet = jest.fn(() => ({ $promise: $q.when({ "hydra:member": allList }) }));
+    const $resourceFactory = jest.fn(() => ({ get: resourceGet }));
+    const playbookService = {
+      // Should NOT be called when in dashboard mode — getActionPlaybooks
+      // requires entity.module which we don't have.
+      getActionPlaybooks: jest.fn(() => $q.when([])),
+      getTriggerStep: jest.fn((pb) => pb && pb.steps && pb.steps[0]),
+      checkPlaybookExecutionCompletion: jest.fn(),
+      getExecutedPlaybookLogData: jest.fn(() => $q.when({ result: null })),
+    };
+    const FormEntityService = { get: jest.fn(() => null) };
+    const { scope } = createCtrl({
+      config: { source: { kind: "playbook" } },
+      services: { playbookService, FormEntityService, $resource: $resourceFactory },
+      state: { params: {} },
+    });
+    expect(scope.isDashboardContext).toBe(true);
+    expect(scope.showAllPlaybooks).toBe(true);
+    expect(playbookService.getActionPlaybooks).not.toHaveBeenCalled();
+    // The request targets the all-workflows endpoint (lists generic playbooks
+    // too, not just the record-context action triggers from
+    // /api/workflows/actions). Listed lightweight (no $relationships → no step
+    // bodies); the picked playbook's trigger step is fetched on select.
+    // isActive must be baked into the URL (Angular's param serializer is bypassed
+    // here by baking the query string directly).
+    const calledUrl = $resourceFactory.mock.calls[0][0];
+    expect(calledUrl).toContain("/api/3/workflows");
+    expect(calledUrl).toContain("isActive=true");
+    expect(calledUrl).not.toContain("/api/workflows/actions");
+    expect(scope.playbooks.length).toBe(2);
+    expect(scope.playbooks[0].actionTriggerName).toBe("PB One");
+    // Decorated entries are plain objects (no $resource cruft) carrying only
+    // what the picker + onPlaybookPicked need.
+    expect(scope.playbooks[0]).toEqual({
+      uuid: "p1",
+      "@id": "/api/3/workflows/p1",
+      name: "PB1",
+      steps: allList[0].steps,
+      actionTriggerName: "PB One",
+      collectionName: "",
+    });
+  });
+
+  test("loadAllPlaybooks reads alternate response envelopes and warns when empty", () => {
+    // res.data shape (some proxies unwrap hydra), then an empty result.
+    const resourceGet = jest.fn(() => ({ $promise: $q.when({ data: [] }) }));
+    const $resourceFactory = jest.fn(() => ({ get: resourceGet }));
+    const toaster = { success: jest.fn(), error: jest.fn(), warning: jest.fn(), info: jest.fn() };
+    const playbookService = {
+      getActionPlaybooks: jest.fn(() => $q.when([])),
+      getTriggerStep: jest.fn(),
+      checkPlaybookExecutionCompletion: jest.fn(),
+      getExecutedPlaybookLogData: jest.fn(() => $q.when({ result: null })),
+    };
+    const { scope } = createCtrl({
+      config: { source: { kind: "playbook" } },
+      services: { playbookService, FormEntityService: { get: () => null }, $resource: $resourceFactory, toaster },
+      state: { params: {} },
+    });
+    expect(scope.playbooks).toEqual([]);
+    expect(toaster.warning).toHaveBeenCalled();
+  });
+
+  test("record context (entity.module present) leaves dashboard flag false", () => {
+    const FormEntityService = { get: jest.fn(() => ({ module: "alerts" })) };
+    const playbookService = {
+      getActionPlaybooks: jest.fn(() => $q.when([])),
+      getTriggerStep: jest.fn(),
+      checkPlaybookExecutionCompletion: jest.fn(),
+      getExecutedPlaybookLogData: jest.fn(() => $q.when({ result: null })),
+    };
+    const { scope } = createCtrl({
+      config: { source: { kind: "playbook" } },
+      services: { playbookService, FormEntityService },
+    });
+    expect(scope.isDashboardContext).toBe(false);
+    expect(scope.showAllPlaybooks).toBe(false);
+    expect(playbookService.getActionPlaybooks).toHaveBeenCalled();
+  });
+
+  test("$state.params.module also counts as record context", () => {
+    const FormEntityService = { get: jest.fn(() => null) };
+    const playbookService = {
+      getActionPlaybooks: jest.fn(() => $q.when([])),
+      getTriggerStep: jest.fn(),
+      checkPlaybookExecutionCompletion: jest.fn(),
+      getExecutedPlaybookLogData: jest.fn(() => $q.when({ result: null })),
+    };
+    const { scope } = createCtrl({
+      config: { source: { kind: "playbook" } },
+      services: { playbookService, FormEntityService },
+      state: { params: { module: "incidents" } },
+    });
+    expect(scope.isDashboardContext).toBe(false);
+    expect(playbookService.getActionPlaybooks).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+
 describe("step navigation gating", () => {
   test("canAdvance(1) requires complete connector selection", () => {
     const { scope } = createCtrl();
@@ -492,5 +765,77 @@ describe("step navigation gating", () => {
     scope.config.source.uuid = "u1";
     scope.config.source.iri = "/api/3/workflows/u1";
     expect(scope.canAdvance(1)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Customer-reported fixes: config persistence + renderer stability.
+// ---------------------------------------------------------------------------
+
+describe("connector param persistence (config-loss safety net)", () => {
+  test("syncParamsFromConnectorFields copies live field values into config.params", () => {
+    const { scope } = createCtrl({
+      config: { source: { kind: "connector", name: "c", version: "1", operation: "op", config: "cfg" } },
+    });
+    scope.connectorParamFields = [
+      { name: "ip", value: "1.2.3.4" },
+      { name: "hidden", value: "x", visible: false }, // excluded
+      {
+        name: "mode",
+        value: "policy",
+        onchange: { policy: [{ name: "policy_name", value: "blocklist" }] },
+      },
+      { name: "wrap", parameters: [{ name: "nested", value: "deep" }] },
+    ];
+    scope.config.params = {};
+    scope.syncParamsFromConnectorFields();
+    expect(scope.config.params.ip).toBe("1.2.3.4");
+    expect(scope.config.params.mode).toBe("policy");
+    expect(scope.config.params.policy_name).toBe("blocklist");
+    expect(scope.config.params.nested).toBe("deep");
+    expect(scope.config.params.hidden).toBeUndefined();
+  });
+
+  test("save() syncs field values into config.params before closing", () => {
+    const close = jest.fn();
+    const { scope } = createCtrl({
+      config: {
+        source: { kind: "connector", name: "c", version: "1", operation: "op", config: "cfg" },
+      },
+      services: { $uibModalInstance: { close, dismiss: jest.fn() } },
+    });
+    // Reach Output step so canSave() passes.
+    scope.gotoStep(4);
+    scope.connectorParamFields = [{ name: "ip", value: "9.9.9.9", required: true }];
+    scope.config.params = {};
+    scope.save();
+    expect(close).toHaveBeenCalled();
+    expect(close.mock.calls[0][0].params.ip).toBe("9.9.9.9");
+  });
+});
+
+describe("connectorDataForRenderer identity stability (anti-flash)", () => {
+  test("changing only the configuration keeps the renderer-data reference stable", () => {
+    const details = { operations: [{ operation: "op", title: "Op", parameters: [] }], configuration: [
+      { config_id: "a", name: "A" }, { config_id: "b", name: "B" },
+    ] };
+    const connectorService = {
+      loadConnectors: jest.fn(() => $q.when({ data: [] })),
+      getConnector: jest.fn(() => $q.when(details)),
+      executeConnectorAction: jest.fn(() => $q.when({ data: {} })),
+      getAgents: jest.fn(() => $q.when([])),
+    };
+    const { scope } = createCtrl({
+      config: { source: { kind: "connector", name: "c", version: "1", operation: "op", config: "a" } },
+      services: { connectorService },
+    });
+    const first = scope.connectorDataForRenderer;
+    expect(first).toBeTruthy();
+    expect(first.config).toBe("a");
+    // Switch configuration — reference must NOT change (no renderer teardown).
+    scope.picks.configPicked = "b";
+    scope.onConfigPicked();
+    expect(scope.connectorDataForRenderer).toBe(first); // same object
+    expect(scope.connectorDataForRenderer.config).toBe("b"); // updated in place
   });
 });

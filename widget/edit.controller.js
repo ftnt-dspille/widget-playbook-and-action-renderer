@@ -7,8 +7,8 @@
   angular
     .module("cybersponse")
     .controller(
-      "editActionRendererWidget100DevCtrl",
-      editActionRendererWidget100DevCtrl
+      "editActionRendererWidget105DevCtrl",
+      editActionRendererWidget105DevCtrl
     );
 
   // playbookService transitively depends on websocketService -> $stomp ->
@@ -17,7 +17,7 @@
   // instantiating in the harness. We grab it lazily via $injector.get so
   // the connector path still works in the harness even when playbook
   // services are unavailable.
-  editActionRendererWidget100DevCtrl.$inject = [
+  editActionRendererWidget105DevCtrl.$inject = [
     "$scope",
     "$state",
     "$uibModalInstance",
@@ -33,7 +33,7 @@
     "$timeout",
   ];
 
-  function editActionRendererWidget100DevCtrl(
+  function editActionRendererWidget105DevCtrl(
     $scope,
     $state,
     $uibModalInstance,
@@ -128,8 +128,13 @@
        var src = $scope.config.source;
        if (!src) return false;
        if (src.kind === "playbook") {
+         // Playbook param rows bind to config.params[row.name] in the template
+         // (NOT row.value), so the required check must read the same place.
+         var pp = $scope.config.params || {};
          return ($scope.paramRows || []).every(function (r) {
-           return !r.required || (r.value !== undefined && r.value !== null && String(r.value).length > 0);
+           if (!r.required) return true;
+           var v = pp[r.name];
+           return v !== undefined && v !== null && String(v).length > 0;
          });
        }
        if (src.kind !== "connector") return true;
@@ -174,6 +179,18 @@
     $scope.playbooks = [];
     $scope.playbookListLoading = false;
     $scope.entity = null;
+    // Playbook list filters: by default we restrict to playbooks whose
+    // trigger module matches the current record (the "runnable from this
+    // module" set). Toggling showAllPlaybooks fetches every active
+    // action-trigger playbook in the system. playbookSearch is a free-text
+    // filter applied to the dropdown.
+    $scope.showAllPlaybooks = false;
+    $scope.playbookSearch = "";
+    // Dashboard widgets aren't bound to a record; FormEntityService.get()
+    // returns null and $state has no module param. In that context the
+    // "playbooks runnable from this module" filter has no module to filter
+    // by, so we force the "all playbooks" branch and hide the toggle.
+    $scope.isDashboardContext = false;
 
     function loadEntity() {
       try {
@@ -181,6 +198,9 @@
       } catch (e) {
         $scope.entity = null;
       }
+      var stateModule = $state && $state.params && $state.params.module;
+      $scope.isDashboardContext = !($scope.entity && $scope.entity.module) && !stateModule;
+      if ($scope.isDashboardContext) $scope.showAllPlaybooks = true;
     }
 
     function loadConnectorList() {
@@ -209,6 +229,10 @@
     }
 
     function loadPlaybookList() {
+      if ($scope.showAllPlaybooks) {
+        loadAllPlaybooks();
+        return;
+      }
       var pb = getPlaybookService();
       if (!pb) { $scope.playbooks = []; return; }
       var entity = $scope.entity;
@@ -231,7 +255,7 @@
         .getActionPlaybooks(entity, false)
         .then(
           function (list) {
-            $scope.playbooks = list || [];
+            $scope.playbooks = decorateForDropdown(list || []);
             $scope.playbookListLoading = false;
           },
           function () {
@@ -240,6 +264,90 @@
           }
         );
     }
+
+    // Hits /api/workflows/actions directly without a `type` filter so we
+    // get every active action-trigger playbook regardless of which module
+    // its trigger targets. playbookService.getActionPlaybooks always
+    // supplies `type`, so we bypass it for the "all" branch.
+    function loadAllPlaybooks() {
+      $scope.playbookListLoading = true;
+      // IMPORTANT: Angular's $http/$resource param serializer DROPS any
+      // parameter whose name starts with "$" (it treats them as private).
+      // Passing {$relationships, $triggerOnly, $limit} as a params object
+      // therefore sent NONE of them — and relying on the implicit response
+      // page size returned an empty/partial list in some deployments, so the
+      // "Show all playbooks" dropdown came up blank. Bake the $-params into the
+      // URL template instead so they actually reach the server, and read every
+      // response envelope shape ($resource may wrap the hydra collection).
+      // List ALL active playbooks, not just record-context action triggers.
+      // /api/workflows/actions only returns playbooks whose trigger is a record
+      // "action" (route present) — it OMITS generic/referenced/manual playbooks
+      // (e.g. a Start-trigger playbook like "query critical"), which is exactly
+      // what the user needs. We list LIGHTWEIGHT here (no $relationships, so no
+      // step bodies — ~2MB/691 vs ~3.7MB with steps) for a responsive dropdown;
+      // onPlaybookPicked fetches the single picked playbook's trigger step to
+      // derive its trigger type + input variables (a ~5KB, sub-second call).
+      var url = "/api/3/workflows?$limit=1000&isActive=true";
+      $resource(url, {}, { query: { method: "GET", isArray: false } })
+        .get()
+        .$promise.then(
+          function (res) {
+            var list =
+              (res &&
+                (res["hydra:member"] ||
+                  res.hydraMember ||
+                  res.member ||
+                  res.data ||
+                  (Array.isArray(res) ? res : null))) ||
+              [];
+            $scope.playbooks = decorateForDropdown(list);
+            $scope.playbookListLoading = false;
+            if (!$scope.playbooks.length) {
+              toaster.warning({ body: "No active action-trigger playbooks were returned." });
+            }
+          },
+          function () {
+            $scope.playbookListLoading = false;
+            toaster.error({ body: "Failed to load playbooks." });
+          }
+        );
+    }
+
+    // playbookService decorates each playbook with actionTriggerName +
+    // collectionName; the raw /api/workflows/actions response doesn't.
+    // Mirror that here so both code paths render identically in the
+    // dropdown. moduleLabel is a fallback when collectionName isn't
+    // resolvable (we don't fetch the collection-name map for the "all"
+    // branch — too expensive for a dropdown decoration).
+    function decorateForDropdown(list) {
+      return (list || []).map(function (pb) {
+        var triggerStep = (pb.steps && pb.steps[0]) || null;
+        var args = (triggerStep && triggerStep.arguments) || {};
+        var col = pb.collection;
+        var fromHydratedCollection =
+          col && typeof col === "object" ? (col.name || col.label) : null;
+        // Build a PLAIN, lean object rather than mutating/returning the raw
+        // $resource instance. ui-select's `filter: { $: search }` deep-recurses
+        // every choice; a $resource carries $promise/$resolved and nested hydra
+        // refs that can make that comparator throw or match nothing, blanking
+        // the "Show all" dropdown. A plain object with just the fields the
+        // picker + onPlaybookPicked read renders reliably for both list paths.
+        return {
+          uuid: pb.uuid,
+          "@id": pb["@id"],
+          name: pb.name,
+          steps: pb.steps,
+          actionTriggerName: pb.actionTriggerName || args.title || pb.name,
+          collectionName:
+            pb.collectionName || pb.moduleLabel || fromHydratedCollection || args.resource || "",
+        };
+      });
+    }
+
+    $scope.onPlaybookScopeToggle = function () {
+      $scope.playbooks = [];
+      loadPlaybookList();
+    };
 
     $scope.onKindChange = function () {
       $scope.config.params = {};
@@ -337,30 +445,97 @@
       refreshConnectorDataForRenderer();
     };
 
+    // Resolve a playbook's trigger step. Prefer the platform playbookService
+    // (full fidelity in the Application Editor), but fall back to deriving it
+    // from the playbook's own steps when that service isn't registered — which
+    // is exactly the case the "Show all" branch serves (plain /api/workflows/
+    // actions data, no websocket/$stomp playbookService). Action-trigger
+    // playbooks expose the trigger as the step carrying arguments.route /
+    // inputVariables; decorateForDropdown already treats steps[0] as the
+    // trigger, so steps[0] is the last-resort fallback.
+    function getTriggerStepFor(pb) {
+      var svc = lazyService("playbookService");
+      if (svc && typeof svc.getTriggerStep === "function") {
+        try {
+          var t = svc.getTriggerStep(pb);
+          if (t) return t;
+        } catch (e) {
+          /* fall through to step-derived trigger */
+        }
+      }
+      var steps = (pb && pb.steps) || [];
+      for (var i = 0; i < steps.length; i++) {
+        var a = steps[i] && steps[i].arguments;
+        if (a && (a.route || a.inputVariables)) return steps[i];
+      }
+      return steps[0] || null;
+    }
+
     // -------- Playbook selection ------------------------------------------
+    // The "Show all" list is lightweight (no step bodies), so a picked entry may
+    // not carry its trigger step yet. Fetch it (single, ~5KB) before deriving the
+    // source; if the entry already has steps (module-scoped list, or a test
+    // passing a full object) use them directly. Returns a promise so callers
+    // (and tests) can await the populated config.source.
     $scope.onPlaybookPicked = function () {
       var pb = $scope.picks.playbookPicked;
-      if (!pb) return;
-      var pbSvc = getPlaybookService();
-      if (!pbSvc) return;
-      var trigger = pbSvc.getTriggerStep(pb);
-      var inputVars = (trigger && trigger.arguments && trigger.arguments.inputVariables) || [];
+      if (!pb) return $q.when(null);
+      if (pb.steps && pb.steps.length) {
+        applyPickedPlaybook(pb);
+        return $q.when($scope.config.source);
+      }
+      $scope.playbookDetailLoading = true;
+      return $resource("/api/3/workflows/" + pb.uuid + "?$relationships=true&$triggerOnly=true")
+        .get()
+        .$promise.then(
+          function (full) {
+            $scope.playbookDetailLoading = false;
+            applyPickedPlaybook(angular.extend({}, pb, { steps: full && full.steps }));
+            return $scope.config.source;
+          },
+          function () {
+            // Degrade gracefully: still select the playbook (manual trigger by
+            // uuid, no input vars) so the user isn't blocked by a detail-fetch
+            // hiccup. notrigger works without the trigger step.
+            $scope.playbookDetailLoading = false;
+            applyPickedPlaybook(pb);
+            return $scope.config.source;
+          }
+        );
+    };
+
+    function applyPickedPlaybook(pb) {
+      var trigger = getTriggerStepFor(pb);
+      var targs = (trigger && trigger.arguments) || {};
+      var inputVars = targs.inputVariables || [];
+      // Trigger type drives WHICH endpoint the view panel fires:
+      //  - "action": a record-context action trigger (arguments.route present) →
+      //    POST /api/triggers/1/action/<route> with {__uuid,__resource,records}.
+      //  - "manual": a generic / referenced / manual Start-trigger playbook (no
+      //    route, e.g. "query critical") → POST /api/triggers/1/notrigger/<uuid>.
+      var triggerType = targs.route ? "action" : "manual";
       $scope.config.source = {
         kind: "playbook",
+        triggerType: triggerType,
         uuid: pb.uuid,
         iri: pb["@id"],
         name: pb.name,
-        title: (trigger && trigger.arguments && trigger.arguments.title) || pb.name,
-        route: trigger && trigger.arguments && trigger.arguments.route,
-        singleRecordExecution:
-          trigger && trigger.arguments && trigger.arguments.singleRecordExecution,
+        title: targs.title || pb.name,
+        route: targs.route,
+        singleRecordExecution: targs.singleRecordExecution,
         inputVariables: inputVars.map(function (v) {
-          return { name: v.name, type: v.type, label: v.label || v.name };
+          return {
+            name: v.name,
+            type: v.type,
+            label: v.label || v.name,
+            required: !!v.required,
+            defaultValue: v.defaultValue,
+          };
         }),
       };
       $scope.config.params = {};
       $scope.rebuildParamRows();
-    };
+    }
 
     // -------- Param rendering rows ----------------------------------------
     // For connector sources we hand the live operation parameter schema
@@ -397,14 +572,56 @@
         $scope.connectorDataForRenderer = null;
         return;
       }
+      var configuration =
+        ($scope.connectorDetails.configuration || $scope.connectorDetails.configurations || []);
+      var cur = $scope.connectorDataForRenderer;
+      // cs-connector-field-renderer re-initializes (and the user-visible fields
+      // flash/reset) whenever the connector-data REFERENCE changes. Picking a
+      // different configuration only needs the new config_id, not a full
+      // teardown — so when the connector+version are unchanged we mutate the
+      // existing object in place and keep its reference stable. Only a genuine
+      // connector/version switch swaps the reference.
+      if (cur && cur.connector === src.name && cur.version === src.version) {
+        cur.config = src.config;
+        cur.configuration = configuration;
+        return;
+      }
       $scope.connectorDataForRenderer = {
         connector: src.name,
         version: src.version,
         config: src.config,
-        configuration:
-          ($scope.connectorDetails.configuration || $scope.connectorDetails.configurations || []),
+        configuration: configuration,
       };
     }
+
+    // Flatten the live connector field values back into config.params. The
+    // cs-connector-field-renderer binds to config.params, but a renderer
+    // re-init (config switch, onchange subfield reveal) can repopulate the
+    // field objects from schema defaults without writing through — so user
+    // input survives on the field objects but not in config.params, and is
+    // lost on save. Walking the field tree and copying p.value -> config.params
+    // right before we read it (save + run) makes the entered values durable
+    // regardless of the renderer's write-through behavior.
+    function syncParamsFromConnectorFields() {
+      var src = $scope.config.source;
+      if (!src || src.kind !== "connector") return;
+      $scope.config.params = $scope.config.params || {};
+      function walk(arr) {
+        (arr || []).forEach(function (p) {
+          if (!p || !p.name) return;
+          if (p.visible === false) return;
+          if (p.value !== undefined) $scope.config.params[p.name] = p.value;
+          if (Array.isArray(p.parameters)) walk(p.parameters);
+          if (p.onchange && typeof p.onchange === "object") {
+            Object.keys(p.onchange).forEach(function (k) {
+              if (Array.isArray(p.onchange[k])) walk(p.onchange[k]);
+            });
+          }
+        });
+      }
+      walk($scope.connectorParamFields);
+    }
+    $scope.syncParamsFromConnectorFields = syncParamsFromConnectorFields;
     $scope.hasParams = function () {
       var src = $scope.config.source;
       if (!src) return false;
@@ -499,7 +716,15 @@
             name: v.name,
             title: v.label || v.name,
             type: v.type || "text",
+            required: !!v.required,
           });
+          // The template binds each row to config.params[row.name]; seed the
+          // playbook's own defaultValue so a non-empty default doesn't read as
+          // an unfilled required param (and so the user sees the default).
+          if (!Object.prototype.hasOwnProperty.call($scope.config.params, v.name) &&
+              v.defaultValue !== undefined && v.defaultValue !== null) {
+            $scope.config.params[v.name] = v.defaultValue;
+          }
         });
       }
     };
@@ -568,6 +793,9 @@
     $scope.executeElapsedMs = null;
 
     $scope.runWithCurrentRecord = function () {
+      // Pull the latest field values into config.params before resolving, so
+      // the sample run uses exactly what the user typed (see sync helper).
+      syncParamsFromConnectorFields();
       $scope.executing = true;
       $scope.lastExecutionError = null;
       $scope.executeStartedAt = Date.now();
@@ -630,17 +858,28 @@
       var recordIri = entity && entity.originalData && entity.originalData["@id"];
       var body = angular.extend({}, params || {});
       if (recordIri) body.records = [recordIri];
-      // SOAR's /api/triggers/1/action/<route> endpoint identifies the
-      // playbook by `__uuid` (the *playbook* uuid, not the record's) and
-      // the entity collection by `__resource`. Mirroring playbookService.M
-      // in app.unmin.js — passing the record uuid here is what causes the
-      // "No workflow found for id <recordUuid>" 404.
-      if (src.uuid) body.__uuid = src.uuid;
-      if (entity && entity.module) body.__resource = entity.module;
-      if (src.singleRecordExecution !== undefined) {
-        body.singleRecordExecution = src.singleRecordExecution;
+      // Generic / referenced / manual playbooks (no action route) fire via the
+      // manual-trigger endpoint by playbook UUID; record-context action triggers
+      // fire via the action endpoint by route. See onPlaybookPicked + the view
+      // controller's triggerPlaybookHeadless for the same split.
+      var isManual = src.triggerType === "manual" || !src.route;
+      var url;
+      if (isManual) {
+        var MANUAL = (API && API.MANUAL_TRIGGER) || "api/triggers/1/notrigger/";
+        url = MANUAL + src.uuid;
+      } else {
+        // SOAR's /api/triggers/1/action/<route> endpoint identifies the
+        // playbook by `__uuid` (the *playbook* uuid, not the record's) and
+        // the entity collection by `__resource`. Mirroring playbookService.M
+        // in app.unmin.js — passing the record uuid here is what causes the
+        // "No workflow found for id <recordUuid>" 404.
+        if (src.uuid) body.__uuid = src.uuid;
+        if (entity && entity.module) body.__resource = entity.module;
+        if (src.singleRecordExecution !== undefined) {
+          body.singleRecordExecution = src.singleRecordExecution;
+        }
+        url = API.ACTION_TRIGGER + src.route;
       }
-      var url = API.ACTION_TRIGGER + src.route;
       return $resource(url)
         .save(body)
         .$promise.then(function (res) {
@@ -697,6 +936,10 @@
           if (!Array.isArray(val) || s.idx < 0 || s.idx >= val.length) return { found: false };
           val = val[s.idx];
         } else {
+          // Auto-descend a single-element array (mirrors the view controller's
+          // resolvePath): a key path reaches into a lone wrapper element so
+          // "result.data" resolves when result is [{data:[…]}]. Length-1 only.
+          if (Array.isArray(val) && val.length === 1) val = val[0];
           if (val == null || typeof val !== "object" || !(s.key in val)) return { found: false };
           val = val[s.key];
         }
@@ -784,6 +1027,9 @@
       // runtime, which the directive's $valid check can't see. Just trip
       // the form's submitted state so any inline error messages light up
       // before saving.
+      // Persist the live connector field values into config.params first —
+      // otherwise input entered after the last render pass is dropped on save.
+      syncParamsFromConnectorFields();
       var f = $scope.editForm;
       if (f && typeof f.$setSubmitted === "function") f.$setSubmitted();
       if (!$scope.canSave()) {

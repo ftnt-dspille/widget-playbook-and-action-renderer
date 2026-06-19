@@ -25,8 +25,8 @@
   angular
     .module("cybersponse")
     .controller(
-      "actionRendererWidget100DevCtrl",
-      actionRendererWidget100DevCtrl
+      "actionRendererWidget105DevCtrl",
+      actionRendererWidget105DevCtrl
     );
 
   // playbookService transitively depends on websocketService -> $stomp ->
@@ -34,7 +34,7 @@
   // these services through $injector lets the controller instantiate even
   // when those provider chains are unavailable, so connector-source widgets
   // still render in the harness.
-  actionRendererWidget100DevCtrl.$inject = [
+  actionRendererWidget105DevCtrl.$inject = [
     "$scope",
     "$state",
     "config",
@@ -48,7 +48,7 @@
     "$injector",
   ];
 
-  function actionRendererWidget100DevCtrl(
+  function actionRendererWidget105DevCtrl(
     $scope,
     $state,
     config,
@@ -125,6 +125,12 @@
           if (!Array.isArray(v) || s.idx < 0 || s.idx >= v.length) return undefined;
           v = v[s.idx];
         } else {
+          // Auto-descend a single-element array: connector/playbook results
+          // often wrap the payload as `[ { ...fields } ]`, so let a key path
+          // reach into the lone element (e.g. "result.data" when result is
+          // [{data:[…]}]) without forcing an explicit "result[0]". Only safe
+          // for length-1 arrays; multi-element arrays still need an index.
+          if (Array.isArray(v) && v.length === 1) v = v[0];
           if (v == null || typeof v !== "object" || !(s.key in v)) return undefined;
           v = v[s.key];
         }
@@ -169,7 +175,8 @@
     function execute() {
       var src = $scope.config.source;
       if (!src || !src.kind) {
-        $scope.error = "Widget is not configured. Edit it to choose an action.";
+        $scope.loading = false;
+        $scope.error = "Widget is not configured — open the editor and pick a source.";
         return;
       }
       $scope.loading = true;
@@ -224,14 +231,27 @@
       var body = angular.extend({}, params || {});
       var iri = entity && entity.originalData && entity.originalData["@id"];
       if (iri) body.records = [iri];
-      // __uuid is the *playbook* uuid (not the record's); __resource is the
-      // entity module. See playbookService.M in app.unmin.js.
-      if (src.uuid) body.__uuid = src.uuid;
-      if (entity && entity.module) body.__resource = entity.module;
-      if (src.singleRecordExecution !== undefined) {
-        body.singleRecordExecution = src.singleRecordExecution;
+      // Generic / referenced / manual playbooks (no action route) are fired via
+      // the manual-trigger endpoint by playbook UUID, mirroring the platform's
+      // own "Run" action (playbookService: MANUAL_TRIGGER + getEndPathName(@id)).
+      // Record-context action triggers use the action endpoint by route +
+      // {__uuid,__resource}. triggerType is set at pick time; fall back to the
+      // presence of a route for configs saved before triggerType existed.
+      var isManual = src.triggerType === "manual" || !src.route;
+      var url;
+      if (isManual) {
+        var MANUAL = (API && API.MANUAL_TRIGGER) || "api/triggers/1/notrigger/";
+        url = MANUAL + src.uuid;
+      } else {
+        // __uuid is the *playbook* uuid (not the record's); __resource is the
+        // entity module. See playbookService.M in app.unmin.js.
+        if (src.uuid) body.__uuid = src.uuid;
+        if (entity && entity.module) body.__resource = entity.module;
+        if (src.singleRecordExecution !== undefined) {
+          body.singleRecordExecution = src.singleRecordExecution;
+        }
+        url = API.ACTION_TRIGGER + src.route;
       }
-      var url = API.ACTION_TRIGGER + src.route;
       return $resource(url)
         .save(body)
         .$promise.then(function (res) {
@@ -296,7 +316,10 @@
       var rows = [];
       if (Array.isArray(rooted)) rows = rooted;
       else if (rooted && typeof rooted === "object") rows = [rooted];
-      else rows = [{ value: rooted }];
+      // A bare primitive root is kept as the row itself so the auto-mode
+      // "value" column formats it directly (formatCell(7) -> "7"); wrapping it
+      // as {value:7} would instead stringify the wrapper into the cell.
+      else rows = [rooted];
 
       var headers, cols;
       if (cfg.mode === "columns" && cfg.columns && cfg.columns.length) {

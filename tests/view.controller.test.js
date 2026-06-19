@@ -11,7 +11,7 @@ angular.module("cybersponse", []); // eslint-disable-line no-undef
 
 require("../widget/view.controller.js");
 
-const CTRL_NAME = "actionRendererWidget100DevCtrl";
+const CTRL_NAME = "actionRendererWidget105DevCtrl";
 
 const ngModule = window.angular.mock.module; // eslint-disable-line no-undef
 const ngInject = window.angular.mock.inject; // eslint-disable-line no-undef
@@ -22,7 +22,10 @@ beforeEach(() => {
   ngModule("cybersponse", ($provide) => {
     $provide.value("config", {});
     $provide.value("$state", { current: { name: "main.viewPanel.detail" }, params: { module: "alerts", id: "1" } });
-    $provide.value("API", { ACTION_TRIGGER: "api/triggers/1/action/" });
+    $provide.value("API", {
+      ACTION_TRIGGER: "api/triggers/1/action/",
+      MANUAL_TRIGGER: "api/triggers/1/notrigger/",
+    });
     $provide.factory("toaster", () => ({
       success: jest.fn(), error: jest.fn(), warning: jest.fn(), info: jest.fn(),
     }));
@@ -224,6 +227,20 @@ describe("output mode — table", () => {
     expect(scope.tableRows.length).toBe(2);
   });
 
+  test("rootPath auto-descends a single-element wrapper array (result.data → rows)", () => {
+    // The live FortiGate/generic-playbook shape: gui_response.result is a
+    // 1-element array wrapping the real rows under .data. The root path
+    // "data.gui_response.result.data" should resolve without an explicit [0].
+    const { scope } = setupWithTable(
+      { rootPath: "data.gui_response.result.data", mode: "auto", columns: [] },
+      { data: { gui_response: { result: [{ data: [{ name: "root", type: 1 }, { name: "test", type: 2 }] }] } } }
+    );
+    scope.refresh();
+    flush();
+    expect(scope.tableHeaders.sort()).toEqual(["name", "type"]);
+    expect(scope.tableRows.length).toBe(2);
+  });
+
   test("auto mode for array of primitives uses 'value' column", () => {
     const { scope } = setupWithTable(
       { rootPath: "list", mode: "auto", columns: [] },
@@ -390,5 +407,41 @@ describe("playbook source dispatch", () => {
     expect(body.singleRecordExecution).toBe(true);
     expect(getExecutedPlaybookLogData).toHaveBeenCalledWith(99);
     expect(scope.result).toEqual({ hello: "world" });
+  });
+
+  test("generic/manual playbook trigger uses MANUAL_TRIGGER + uuid (notrigger), not the action route", () => {
+    const save = jest.fn(() => ({ $promise: $q.when({ task_id: "t-9" }) }));
+    const $resource = jest.fn(() => ({ save }));
+    const checkPlaybookExecutionCompletion = jest.fn((taskIds, success) => {
+      success({ status: "finished", instance_ids: 7 });
+    });
+    const getExecutedPlaybookLogData = jest.fn(() => $q.when({ result: { ok: true } }));
+    const { scope } = createCtrl({
+      config: {
+        autoExecute: false,
+        source: {
+          kind: "playbook",
+          triggerType: "manual",
+          uuid: "9ce6f46f-29f2-43fd-8a4e-fb66cadf4450",
+          iri: "/api/3/workflows/9ce6f46f-29f2-43fd-8a4e-fb66cadf4450",
+          name: "query critical",
+        },
+        params: {},
+      },
+      services: {
+        $resource,
+        playbookService: { checkPlaybookExecutionCompletion, getExecutedPlaybookLogData },
+      },
+    });
+    scope.refresh();
+    flush();
+    expect($resource).toHaveBeenCalledWith(
+      "api/triggers/1/notrigger/9ce6f46f-29f2-43fd-8a4e-fb66cadf4450"
+    );
+    const body = save.mock.calls[0][0];
+    // Manual trigger must NOT carry the action-trigger record envelope.
+    expect(body.__uuid).toBeUndefined();
+    expect(body.__resource).toBeUndefined();
+    expect(scope.result).toEqual({ ok: true });
   });
 });
