@@ -17,8 +17,34 @@ widget/
     css/actionRenderer.css
     js/directives.js           – actionRendererJinjaPane + actionRendererHtmlPreview
 tests/                         – jest + jsdom + angular-mocks
+  e2e/                         – Playwright specs (need the devkit — see Testing)
 jest.config.js
 ```
+
+## Testing
+
+Two tiers, both living in `tests/`:
+
+- **Unit (jest)** — `tests/*.test.js`. Self-contained; runnable from a bare
+  clone of this repo (`npx jest` or via the devkit `make test-unit
+  WIDGET=widget-action-renderer`).
+- **E2E (Playwright)** — `tests/e2e/*.spec.js`. **These depend on the
+  fsr-widget-devkit checkout** and do NOT run from a bare clone of this repo.
+  They require this widget to sit at `devkit/widgets-src/<widget>/` with a
+  sibling `fortisoar-widget-harness/`: the harness boots the dev server, its
+  Playwright "widgets" project (testDir = the canonicalized `widgets-src`)
+  discovers these specs, and the `*Live*.spec.js` ones drive a real box through
+  the harness proxy. They reach harness helpers (`_probe`, `soarBrowser`,
+  `viewTemplate`) via relative `../../../../fortisoar-widget-harness/...` paths
+  that only resolve inside the devkit layout.
+
+  Run e2e from the devkit root, never standalone:
+  ```
+  make test-e2e-widget WIDGET=widget-action-renderer        # mock tier
+  make test-e2e-spec SPEC=widgets-src/widget-action-renderer/tests/e2e/<file>.spec.js
+  E2E_LIVE=1 ...                                             # *Live* specs (real box)
+  ```
+  `*Live*.spec.js` specs are excluded unless `E2E_LIVE=1`.
 
 Asset paths in HTML use the `actionRendererWidget-1.0.0/...` prefix because
 both the dev harness and SOAR's installed-widget mount serve files under
