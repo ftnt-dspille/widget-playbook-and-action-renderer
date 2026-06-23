@@ -237,7 +237,7 @@
       // Record-context action triggers use the action endpoint by route +
       // {__uuid,__resource}. triggerType is set at pick time; fall back to the
       // presence of a route for configs saved before triggerType existed.
-      var isManual = src.triggerType === "manual" || !src.route;
+      var isManual = src.triggerType === "manual" || !src.route || src.noRecordExecution === true;
       var url;
       if (isManual) {
         var MANUAL = (API && API.MANUAL_TRIGGER) || "api/triggers/1/notrigger/";

@@ -512,8 +512,13 @@
       //  - "action": a record-context action trigger (arguments.route present) →
       //    POST /api/triggers/1/action/<route> with {__uuid,__resource,records}.
       //  - "manual": a generic / referenced / manual Start-trigger playbook (no
-      //    route, e.g. "query critical") → POST /api/triggers/1/notrigger/<uuid>.
-      var triggerType = targs.route ? "action" : "manual";
+      //    route, e.g. "query critical"), OR a no-record manual trigger
+      //    (noRecordExecution) → POST /api/triggers/1/notrigger/<uuid>.
+      //    noRecordExecution playbooks carry a route but run without a record;
+      //    firing them via action/<route> 404s when that route isn't registered
+      //    (e.g. the playbook lives in an unpublished/Drafts collection). Run
+      //    them by UUID instead — the same call the designer "Run" uses.
+      var triggerType = (targs.route && !targs.noRecordExecution) ? "action" : "manual";
       $scope.config.source = {
         kind: "playbook",
         triggerType: triggerType,
@@ -522,6 +527,7 @@
         name: pb.name,
         title: targs.title || pb.name,
         route: targs.route,
+        noRecordExecution: targs.noRecordExecution,
         singleRecordExecution: targs.singleRecordExecution,
         inputVariables: inputVars.map(function (v) {
           return {
@@ -862,7 +868,7 @@
       // manual-trigger endpoint by playbook UUID; record-context action triggers
       // fire via the action endpoint by route. See onPlaybookPicked + the view
       // controller's triggerPlaybookHeadless for the same split.
-      var isManual = src.triggerType === "manual" || !src.route;
+      var isManual = src.triggerType === "manual" || !src.route || src.noRecordExecution === true;
       var url;
       if (isManual) {
         var MANUAL = (API && API.MANUAL_TRIGGER) || "api/triggers/1/notrigger/";

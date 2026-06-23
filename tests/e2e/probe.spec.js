@@ -18,6 +18,30 @@ test("probe: action-renderer mounts and edit modal opens cleanly", async ({ page
     localStorage.setItem("harness.id", uuid);
   }, ALERT_UUID);
 
+  // Hermetic completeness: the view-panel context resolves the seeded alert
+  // record, so the widget (and harness header) fetch /api/3/alerts/<uuid>. The
+  // harness has no server-side record fixture, so stub it here — otherwise it
+  // proxies to the box and the hermetic leak gate fails. (Previously this fetch
+  // happened to fire after teardown and escaped the gate; the render-settle
+  // pump now flushes it in-test, which is correct — so stub it properly.)
+  await page.route(/\/api\/3\/alerts\/[^?]+/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        "@id": "/api/3/alerts/" + ALERT_UUID,
+        "@type": "alerts",
+        uuid: ALERT_UUID,
+        name: "Probe Alert",
+        recordTags: [],
+      }),
+    })
+  );
+  // The edit modal loads the connector list for the "Connector action" source.
+  await page.route(/\/api\/integration\/connectors\//, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ "hydra:member": [], data: [] }) })
+  );
+
   const outDir = testInfo.outputDir;
   const report = await probeWidget(page, "actionRendererWidget", async (p) => {
     await p.locator("#edit-config").click();
