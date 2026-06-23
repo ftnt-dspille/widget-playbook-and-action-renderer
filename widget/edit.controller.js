@@ -271,25 +271,36 @@
     // supplies `type`, so we bypass it for the "all" branch.
     function loadAllPlaybooks() {
       $scope.playbookListLoading = true;
-      // IMPORTANT: Angular's $http/$resource param serializer DROPS any
-      // parameter whose name starts with "$" (it treats them as private).
-      // Passing {$relationships, $triggerOnly, $limit} as a params object
-      // therefore sent NONE of them — and relying on the implicit response
-      // page size returned an empty/partial list in some deployments, so the
-      // "Show all playbooks" dropdown came up blank. Bake the $-params into the
-      // URL template instead so they actually reach the server, and read every
-      // response envelope shape ($resource may wrap the hydra collection).
       // List ALL active playbooks, not just record-context action triggers.
       // /api/workflows/actions only returns playbooks whose trigger is a record
       // "action" (route present) — it OMITS generic/referenced/manual playbooks
       // (e.g. a Start-trigger playbook like "query critical"), which is exactly
-      // what the user needs. We list LIGHTWEIGHT here (no $relationships, so no
-      // step bodies — ~2MB/691 vs ~3.7MB with steps) for a responsive dropdown;
-      // onPlaybookPicked fetches the single picked playbook's trigger step to
-      // derive its trigger type + input variables (a ~5KB, sub-second call).
-      var url = "/api/3/workflows?$limit=1000&isActive=true";
-      $resource(url, {}, { query: { method: "GET", isArray: false } })
-        .get()
+      // what the user needs.
+      //
+      // PERF: `GET /api/3/workflows?$limit=1000` returns every workflow with its
+      // full step bodies (~700 playbooks, multiple MB, ~7s) even without
+      // $relationships — far more than a name+uuid dropdown needs. Switch to
+      // `POST /api/query/workflows` with `__selectFields` so the server trims the
+      // response to just the columns the picker renders/searches on. The picked
+      // playbook's trigger step (type + input variables) is still fetched on
+      // demand by onPlaybookPicked (~5KB, sub-second), so no fidelity is lost.
+      //
+      // Notes:
+      //  - `$limit` is baked into the URL: Angular's param serializer DROPS any
+      //    "$"-prefixed param (treats it as private), so a params object wouldn't
+      //    reach the server.
+      //  - Query-payload filters are SILENTLY DROPPED without an explicit
+      //    top-level `logic` — hence `logic: "AND"`.
+      //  - `.save()` issues the POST with the body as post-data; we read every
+      //    response envelope shape ($resource may wrap the hydra collection).
+      var body = {
+        logic: "AND",
+        filters: [{ field: "isActive", operator: "eq", value: true }],
+        __selectFields: ["uuid", "name"],
+        sort: [{ field: "name", direction: "asc" }],
+      };
+      $resource("/api/query/workflows?$limit=1000")
+        .save(body)
         .$promise.then(
           function (res) {
             var list =
@@ -334,7 +345,10 @@
         // picker + onPlaybookPicked read renders reliably for both list paths.
         return {
           uuid: pb.uuid,
-          "@id": pb["@id"],
+          // The __selectFields-trimmed "Show all" response may omit @id; the
+          // workflow IRI is deterministic from the uuid, so reconstruct it as a
+          // fallback (onPlaybookPicked reads source.iri).
+          "@id": pb["@id"] || (pb.uuid ? "/api/3/workflows/" + pb.uuid : undefined),
           name: pb.name,
           steps: pb.steps,
           actionTriggerName: pb.actionTriggerName || args.title || pb.name,

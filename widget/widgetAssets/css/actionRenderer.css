@@ -291,6 +291,30 @@ body.theme-light .action-renderer-table-wrap.action-renderer-table-sticky thead 
   background-color: rgba(255, 255, 255, 0.04);
   border-color: rgba(127, 127, 127, 0.35);
 }
+/* ui-select-bootstrap's match button floats its text (.ui-select-match-text
+   pull-left), so in a control taller than one line the selected text hugs the
+   TOP instead of centering ("connector text not centered"). Make the toggle a
+   flex row and vertically center its contents; the label + version meta then
+   sit on one centered baseline (the version was rendering raised/superscript
+   because the floated text and caret didn't share a line box). */
+.action-renderer-edit .ui-select-bootstrap > .ui-select-match > .btn.ui-select-toggle {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  line-height: 1.4;
+  text-align: left;
+}
+.action-renderer-edit .ui-select-bootstrap .ui-select-match-text {
+  float: none;
+  display: inline-flex;
+  align-items: baseline;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.action-renderer-edit .ar-match-meta { margin-left: 6px; font-size: 0.9em; }
 .ui-select-bootstrap > .ui-select-choices {
   max-height: 320px;
   overflow-y: auto;

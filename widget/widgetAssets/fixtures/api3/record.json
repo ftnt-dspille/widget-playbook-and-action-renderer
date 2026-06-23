@@ -1,0 +1,57 @@
+{
+  "@id": "/api/3/alerts/db7afbf7-56c8-4706-87b9-9a8ce2332d05",
+  "@type": "Alert",
+  "uuid": "db7afbf7-56c8-4706-87b9-9a8ce2332d05",
+  "id": 1,
+  "name": " Immediate Action Required: Password Reset Notice ",
+  "description": "{{vars.input.records[0].eventTime }}",
+  "status": {
+    "@id": "/api/3/picklists/a53d5465-75a6-4b7a-8144-4eccc23cea4a",
+    "@type": "Picklist",
+    "itemValue": "Pending",
+    "orderIndex": 3,
+    "color": null,
+    "icon": null,
+    "listName": "/api/3/picklist_names/33e964a9-d607-49f2-813c-7ce46141815a",
+    "uuid": "a53d5465-75a6-4b7a-8144-4eccc23cea4a",
+    "id": 201,
+    "importedBy": []
+  },
+  "severity": {
+    "@id": "/api/3/picklists/7efa2220-39bb-44e4-961f-ac368776e3b0",
+    "@type": "Picklist",
+    "itemValue": "Critical",
+    "orderIndex": 4,
+    "color": "#e31b1d",
+    "icon": null,
+    "listName": "/api/3/picklist_names/4e80cba3-032f-48b4-ac03-17e3ec247aac",
+    "uuid": "7efa2220-39bb-44e4-961f-ac368776e3b0",
+    "id": 444,
+    "importedBy": []
+  },
+  "type": {
+    "@id": "/api/3/picklists/0b3ef6f9-eb29-4ab9-ac98-98364bd1a3aa",
+    "@type": "Picklist",
+    "itemValue": "Phishing",
+    "orderIndex": 9,
+    "color": null,
+    "icon": null,
+    "listName": "/api/3/picklist_names/a7087b9c-5660-495f-a8ac-c3b198ddb8c2",
+    "uuid": "0b3ef6f9-eb29-4ab9-ac98-98364bd1a3aa",
+    "id": 203,
+    "importedBy": []
+  },
+  "source": "User Reported",
+  "sourcedata": "{\"body\": {\"html\": \"<html><head>\\n<meta http-equiv=\\\"Content-Type\\\" content=\\\"text/html; charset=utf-8\\\">\\n</head>\\n<body>\\n<p style=\\\"text-align: center; margin\u2026(truncated for fixture)",
+  "computerName": null,
+  "userName": null,
+  "sourceIp": null,
+  "destinationIp": null,
+  "createDate": 1752785765.589662,
+  "modifyDate": 1779827494.95596,
+  "alertDetectionDate": null,
+  "recordTags": [
+    "Phishing"
+  ],
+  "assignedTo": null
+}

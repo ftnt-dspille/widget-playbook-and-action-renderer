@@ -46,13 +46,18 @@
       <div data-ng-if="config.source.kind === 'connector'">
         <div class="form-group">
           <label class="control-label">Connector</label>
-          <select class="form-control"
-                  data-ng-model="picks.connectorPicked"
-                  data-ng-options="c as (c.label + ' v' + c.version) for c in connectors"
-                  data-ng-change="onConnectorPicked()"
-                  data-ng-disabled="connectorListLoading">
-            <option value="">Select a connector…</option>
-          </select>
+          <ui-select data-ng-model="picks.connectorPicked"
+                     data-on-select="onConnectorPicked()"
+                     data-ng-disabled="connectorListLoading"
+                     theme="bootstrap">
+            <ui-select-match placeholder="Search and select a connector…">
+              <span class="ar-match-label">{{ $select.selected.label }}</span><span class="muted-65 ar-match-meta">v{{ $select.selected.version }}</span>
+            </ui-select-match>
+            <ui-select-choices data-repeat="c in connectors | filter: { $: $select.search }">
+              <div data-ng-bind-html="c.label | highlight: $select.search"></div>
+              <small class="muted-65">v{{ c.version }}</small>
+            </ui-select-choices>
+          </ui-select>
           <div class="font-size-12 muted-65 margin-top-xs" data-ng-if="connectorListLoading">
             Loading connectors…
           </div>
@@ -63,12 +68,17 @@
 
         <div class="form-group" data-ng-if="connectorDetails">
           <label class="control-label">Operation</label>
-          <select class="form-control"
-                  data-ng-model="picks.operationPicked"
-                  data-ng-options="op as (op.title || op.operation) for op in connectorDetails.operations"
-                  data-ng-change="onOperationPicked()">
-            <option value="">Select an operation…</option>
-          </select>
+          <ui-select data-ng-model="picks.operationPicked"
+                     data-on-select="onOperationPicked()"
+                     theme="bootstrap">
+            <ui-select-match placeholder="Search and select an operation…">
+              <span class="ar-match-label">{{ $select.selected.title || $select.selected.operation }}</span>
+            </ui-select-match>
+            <ui-select-choices data-repeat="op in connectorDetails.operations | filter: { $: $select.search }">
+              <div data-ng-bind-html="(op.title || op.operation) | highlight: $select.search"></div>
+              <small class="muted-65" data-ng-if="op.title && op.operation !== op.title" data-ng-bind-html="op.operation | highlight: $select.search"></small>
+            </ui-select-choices>
+          </ui-select>
           <div class="font-size-12 muted-65 margin-top-xs" data-ng-if="config.source.operation && !picks.operationPicked">
             Saved operation: <code>{{ config.source.operationTitle || config.source.operation }}</code>
           </div>
@@ -381,7 +391,6 @@
         </div>
       </div>
     </div>
-  </div>
 
     <div class="action-renderer-nav">
       <button type="button" class="btn btn-default"

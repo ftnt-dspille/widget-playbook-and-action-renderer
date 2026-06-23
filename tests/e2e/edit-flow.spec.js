@@ -65,19 +65,43 @@ async function seedHarness(page) {
 
 async function openEditModal(page) {
   await page.click("#edit-config");
+  // The connector picker is now a searchable ui-select; wait for the container
+  // to render and for the connector list to load (scope.connectors populated).
   await page.waitForSelector(
-    "#edit-modal-body select[data-ng-model='picks.connectorPicked']",
+    "#edit-modal-body ui-select[data-ng-model='picks.connectorPicked']",
     { timeout: 30000 }
   );
-  // Connector list loads asynchronously — wait for at least one option.
   await page.waitForFunction(
     () => {
-      const s = document.querySelector(
-        "#edit-modal-body select[data-ng-model='picks.connectorPicked']"
-      );
-      return s && s.options.length > 1;
+      const form = document.querySelector("#edit-modal-body form");
+      const s = form && window.angular.element(form).scope();
+      return s && (s.connectors || []).length > 0;
     },
     { timeout: 20000 }
+  );
+}
+
+// The connector ui-select can't be driven via native <option> elements, so
+// select through the controller scope (the same path data-on-select triggers).
+// predicateSource picks the first connector whose label matches; null picks the
+// first one.
+function pickConnectorViaScope(page, predicateSource) {
+  return page.evaluate(
+    (predicateSource) => {
+      const form = document.querySelector("#edit-modal-body form");
+      const s = form && window.angular.element(form).scope();
+      if (!s || !(s.connectors || []).length) return { ok: false };
+      let pick = s.connectors[0];
+      if (predicateSource) {
+        const re = new RegExp(predicateSource, "i");
+        pick = s.connectors.find((c) => re.test(c.label || "")) || pick;
+      }
+      s.picks.connectorPicked = pick;
+      s.onConnectorPicked();
+      s.$apply();
+      return { ok: true, picked: pick.label };
+    },
+    predicateSource
   );
 }
 
@@ -219,7 +243,7 @@ test.describe("action-renderer edit modal", () => {
   });
 
   test("connector flow: pick → params → run → output → save", async ({ page }) => {
-    const conn = await pickSelect(page, "picks.connectorPicked", CONNECTOR_NAME_PATTERN.source);
+    const conn = await pickConnectorViaScope(page, CONNECTOR_NAME_PATTERN.source);
     expect(conn.ok, "connector picked").toBe(true);
     await page.waitForTimeout(2500);
 
@@ -391,7 +415,7 @@ test.describe("action-renderer edit modal", () => {
 
   test("saved connector config is restored on reopen", async ({ page }) => {
     // Configure step 1 fully.
-    await pickSelect(page, "picks.connectorPicked", CONNECTOR_NAME_PATTERN.source);
+    await pickConnectorViaScope(page, CONNECTOR_NAME_PATTERN.source);
     await page.waitForTimeout(2500);
     await pickSelectExcluding(page, "picks.operationPicked", "deprecated");
     await page.waitForTimeout(500);

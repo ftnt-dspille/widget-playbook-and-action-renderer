@@ -1,0 +1,51 @@
+{
+  "status": "Success",
+  "totalItems": 3,
+  "itemsPerPage": 3,
+  "nextPage": null,
+  "previousPage": null,
+  "data": [
+    {
+      "id": 2,
+      "name": "imap",
+      "version": "3.5.8",
+      "label": "IMAP",
+      "category": [
+        "utilities"
+      ],
+      "active": true,
+      "system": true,
+      "description": "Steps related to fetching and parsing email",
+      "config_count": 2,
+      "status": "Completed"
+    },
+    {
+      "id": 3,
+      "name": "smtp",
+      "version": "2.6.0",
+      "label": "SMTP",
+      "category": [
+        "utilities"
+      ],
+      "active": true,
+      "system": true,
+      "description": "Steps related to sending email",
+      "config_count": 3,
+      "status": "Completed"
+    },
+    {
+      "id": 4,
+      "name": "phishing-classifier",
+      "version": "1.1.0",
+      "label": "Phishing Classifier",
+      "category": [
+        "Machine Learning"
+      ],
+      "active": true,
+      "system": true,
+      "description": "Classify emails into phishing and non-phishing using machine learning",
+      "config_count": 0,
+      "status": "Completed"
+    }
+  ]
+}

@@ -643,13 +643,16 @@ describe("dashboard playbook listing", () => {
   // The legacy `loadPlaybookList` would early-return with an empty list and
   // the user could never pick a playbook. Verify the controller flips into
   // dashboard mode and uses the all-playbooks $resource path instead.
-  test("isDashboardContext=true forces showAllPlaybooks and lists ALL active playbooks via /api/3/workflows", () => {
+  test("isDashboardContext=true forces showAllPlaybooks and lists ALL active playbooks via POST /api/query/workflows", () => {
+    // __selectFields trims the response to uuid+name only — no step bodies — so
+    // the dropdown payload is a fraction of the full GET /api/3/workflows dump.
     const allList = [
-      { uuid: "p1", "@id": "/api/3/workflows/p1", name: "PB1", steps: [{ arguments: { title: "PB One", route: "r1" } }] },
-      { uuid: "p2", "@id": "/api/3/workflows/p2", name: "PB2", steps: [{ arguments: { title: "PB Two", route: "r2" } }] },
+      { uuid: "p1", "@id": "/api/3/workflows/p1", name: "PB1" },
+      { uuid: "p2", "@id": "/api/3/workflows/p2", name: "PB2" },
     ];
-    const resourceGet = jest.fn(() => ({ $promise: $q.when({ "hydra:member": allList }) }));
-    const $resourceFactory = jest.fn(() => ({ get: resourceGet }));
+    let savedBody = null;
+    const resourceSave = jest.fn((body) => { savedBody = body; return { $promise: $q.when({ "hydra:member": allList }) }; });
+    const $resourceFactory = jest.fn(() => ({ save: resourceSave }));
     const playbookService = {
       // Should NOT be called when in dashboard mode — getActionPlaybooks
       // requires entity.module which we don't have.
@@ -667,34 +670,36 @@ describe("dashboard playbook listing", () => {
     expect(scope.isDashboardContext).toBe(true);
     expect(scope.showAllPlaybooks).toBe(true);
     expect(playbookService.getActionPlaybooks).not.toHaveBeenCalled();
-    // The request targets the all-workflows endpoint (lists generic playbooks
-    // too, not just the record-context action triggers from
-    // /api/workflows/actions). Listed lightweight (no $relationships → no step
-    // bodies); the picked playbook's trigger step is fetched on select.
-    // isActive must be baked into the URL (Angular's param serializer is bypassed
-    // here by baking the query string directly).
+    // The request POSTs to the query endpoint with $limit baked into the URL
+    // ($-params are dropped by Angular's serializer) and lists generic playbooks
+    // too (not just /api/workflows/actions record-context triggers). The picked
+    // playbook's trigger step is fetched on select.
     const calledUrl = $resourceFactory.mock.calls[0][0];
-    expect(calledUrl).toContain("/api/3/workflows");
-    expect(calledUrl).toContain("isActive=true");
+    expect(calledUrl).toContain("/api/query/workflows");
+    expect(calledUrl).toContain("$limit=1000");
     expect(calledUrl).not.toContain("/api/workflows/actions");
+    // Body trims columns via __selectFields and gates the isActive filter with
+    // an explicit logic:"AND" (filters are silently dropped without it).
+    expect(savedBody.logic).toBe("AND");
+    expect(savedBody.__selectFields).toEqual(["uuid", "name"]);
+    expect(savedBody.filters).toEqual([{ field: "isActive", operator: "eq", value: true }]);
     expect(scope.playbooks.length).toBe(2);
-    expect(scope.playbooks[0].actionTriggerName).toBe("PB One");
-    // Decorated entries are plain objects (no $resource cruft) carrying only
-    // what the picker + onPlaybookPicked need.
+    // Without step bodies, actionTriggerName falls back to the playbook name and
+    // collectionName is empty — full fidelity is restored on select.
     expect(scope.playbooks[0]).toEqual({
       uuid: "p1",
       "@id": "/api/3/workflows/p1",
       name: "PB1",
-      steps: allList[0].steps,
-      actionTriggerName: "PB One",
+      steps: undefined,
+      actionTriggerName: "PB1",
       collectionName: "",
     });
   });
 
   test("loadAllPlaybooks reads alternate response envelopes and warns when empty", () => {
     // res.data shape (some proxies unwrap hydra), then an empty result.
-    const resourceGet = jest.fn(() => ({ $promise: $q.when({ data: [] }) }));
-    const $resourceFactory = jest.fn(() => ({ get: resourceGet }));
+    const resourceSave = jest.fn(() => ({ $promise: $q.when({ data: [] }) }));
+    const $resourceFactory = jest.fn(() => ({ save: resourceSave }));
     const toaster = { success: jest.fn(), error: jest.fn(), warning: jest.fn(), info: jest.fn() };
     const playbookService = {
       getActionPlaybooks: jest.fn(() => $q.when([])),
@@ -709,6 +714,26 @@ describe("dashboard playbook listing", () => {
     });
     expect(scope.playbooks).toEqual([]);
     expect(toaster.warning).toHaveBeenCalled();
+  });
+
+  test("reconstructs @id from uuid when __selectFields omits it", () => {
+    // The trimmed query response carries uuid+name but no @id; the picker needs
+    // an IRI (source.iri) so decorateForDropdown rebuilds it deterministically.
+    const list = [{ uuid: "abc123", name: "No IRI PB" }];
+    const resourceSave = jest.fn(() => ({ $promise: $q.when({ "hydra:member": list }) }));
+    const $resourceFactory = jest.fn(() => ({ save: resourceSave }));
+    const playbookService = {
+      getActionPlaybooks: jest.fn(() => $q.when([])),
+      getTriggerStep: jest.fn(),
+      checkPlaybookExecutionCompletion: jest.fn(),
+      getExecutedPlaybookLogData: jest.fn(() => $q.when({ result: null })),
+    };
+    const { scope } = createCtrl({
+      config: { source: { kind: "playbook" } },
+      services: { playbookService, FormEntityService: { get: () => null }, $resource: $resourceFactory },
+      state: { params: {} },
+    });
+    expect(scope.playbooks[0]["@id"]).toBe("/api/3/workflows/abc123");
   });
 
   test("record context (entity.module present) leaves dashboard flag false", () => {

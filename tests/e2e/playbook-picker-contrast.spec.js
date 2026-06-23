@@ -27,18 +27,11 @@ async function seedHarness(page) {
 
 async function openEditModal(page) {
   await page.click("#edit-config");
+  // The connector picker is a searchable ui-select; wait for the container to
+  // render (the choices are loaded lazily and only materialize on open).
   await page.waitForSelector(
-    "#edit-modal-body select[data-ng-model='picks.connectorPicked']",
+    "#edit-modal-body ui-select[data-ng-model='picks.connectorPicked']",
     { timeout: 30000 }
-  );
-  await page.waitForFunction(
-    () => {
-      const sel = document.querySelector(
-        "#edit-modal-body select[data-ng-model='picks.connectorPicked']"
-      );
-      return sel && sel.options.length > 1;
-    },
-    { timeout: 20000 }
   );
 }
 
