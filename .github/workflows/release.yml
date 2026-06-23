@@ -1,0 +1,90 @@
+name: release
+
+# Self-contained release: when widget/info.json's version changes on develop,
+# this single job tags, packages, and publishes a GitHub Release with the .tgz.
+# It is ONE workflow on purpose — a tag pushed by a separate job using the
+# default GITHUB_TOKEN does NOT trigger a tag-keyed workflow (GitHub suppresses
+# runs from GITHUB_TOKEN events), so splitting tag/release never hands off.
+# A manual run (workflow_dispatch) re-releases the current info.json version.
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "widget/info.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Determine version + whether to release
+        id: ver
+        run: |
+          NEW=$(node -p "require('./widget/info.json').version")
+          # On a push, only release when the version actually changed vs the
+          # previous commit; workflow_dispatch always releases the current one.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            OLD=$(git show HEAD~1:widget/info.json 2>/dev/null \
+              | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{try{console.log(JSON.parse(s).version)}catch{console.log('')}})" || true)
+          else
+            OLD=""
+          fi
+          echo "old=$OLD new=$NEW"
+          if [ -z "$NEW" ]; then
+            echo "no version in info.json; aborting"; exit 1
+          fi
+          if [ "${{ github.event_name }}" = "push" ] && [ "$NEW" = "$OLD" ]; then
+            echo "version unchanged; skipping"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          elif git rev-parse "v$NEW" >/dev/null 2>&1; then
+            echo "tag v$NEW already exists; skipping"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$NEW" >> "$GITHUB_OUTPUT"
+
+      - name: Install
+        if: steps.ver.outputs.release == 'true'
+        run: npm install --no-audit --no-fund
+
+      - name: Test
+        if: steps.ver.outputs.release == 'true'
+        run: npm test
+
+      - name: Package (+ permanent "latest" copy)
+        if: steps.ver.outputs.release == 'true'
+        run: |
+          npm run package
+          # Version-agnostic copy → a stable download URL:
+          #   releases/latest/download/<name>-latest.tgz
+          NAME=$(node -p "require('./widget/info.json').name")
+          cp dist/"$NAME"-*.tgz dist/"$NAME"-latest.tgz
+
+      - name: Tag
+        if: steps.ver.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Release
+        if: steps.ver.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: gh release create "v$VERSION" dist/*.tgz --generate-notes --title "v$VERSION"

@@ -1,0 +1,17 @@
+{
+  "name": "widget-playbook-and-action-renderer",
+  "private": true,
+  "version": "0.0.0",
+  "description": "FortiSOAR Playbook & Action Renderer widget",
+  "license": "MIT",
+  "scripts": {
+    "test": "jest --config jest.config.js",
+    "package": "node scripts/package.js"
+  },
+  "devDependencies": {
+    "angular": "^1.8.3",
+    "angular-mocks": "^1.8.3",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  }
+}
