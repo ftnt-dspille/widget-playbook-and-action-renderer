@@ -25,8 +25,8 @@
   angular
     .module("cybersponse")
     .controller(
-      "actionRendererWidget105DevCtrl",
-      actionRendererWidget105DevCtrl
+      "actionRendererWidget106DevCtrl",
+      actionRendererWidget106DevCtrl
     );
 
   // playbookService transitively depends on websocketService -> $stomp ->
@@ -34,7 +34,7 @@
   // these services through $injector lets the controller instantiate even
   // when those provider chains are unavailable, so connector-source widgets
   // still render in the harness.
-  actionRendererWidget105DevCtrl.$inject = [
+  actionRendererWidget106DevCtrl.$inject = [
     "$scope",
     "$state",
     "config",
@@ -48,7 +48,7 @@
     "$injector",
   ];
 
-  function actionRendererWidget105DevCtrl(
+  function actionRendererWidget106DevCtrl(
     $scope,
     $state,
     config,

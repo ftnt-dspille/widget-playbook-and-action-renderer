@@ -21,9 +21,9 @@ async function seedDashboard(page) {
     localStorage.removeItem("harness.id");
     localStorage.setItem(
       "harness.currentWidget",
-      JSON.stringify({ id: "actionRendererWidget-1.0.0" })
+      JSON.stringify({ id: "actionRendererWidget-1.0.6" })
     );
-    localStorage.removeItem("harness.widgetConfig.actionRendererWidget-1.0.0");
+    localStorage.removeItem("harness.widgetConfig.actionRendererWidget-1.0.6");
   });
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2500);

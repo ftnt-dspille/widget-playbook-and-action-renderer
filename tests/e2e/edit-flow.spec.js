@@ -32,11 +32,11 @@ async function seedHarness(page) {
     localStorage.setItem("harness.ctx", "viewpanel");
     // Force the widget select to action-renderer at next mount.
     const cur = JSON.parse(localStorage.getItem("harness.currentWidget") || "null");
-    if (!cur || cur.id !== "actionRendererWidget-1.0.0") {
-      localStorage.setItem("harness.currentWidget", JSON.stringify({ id: "actionRendererWidget-1.0.0" }));
+    if (!cur || cur.id !== "actionRendererWidget-1.0.6") {
+      localStorage.setItem("harness.currentWidget", JSON.stringify({ id: "actionRendererWidget-1.0.6" }));
     }
     // Wipe any saved widget config so each test starts from a clean slate.
-    localStorage.removeItem("harness.widgetConfig.actionRendererWidget-1.0.0");
+    localStorage.removeItem("harness.widgetConfig.actionRendererWidget-1.0.6");
   }, ALERT_UUID);
   await page.reload({ waitUntil: "domcontentloaded" });
   // The harness fetches the record before mounting the widget; wait for it.
