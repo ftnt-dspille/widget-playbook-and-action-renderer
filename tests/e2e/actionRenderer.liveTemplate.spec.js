@@ -99,7 +99,7 @@ test.describe.configure({ mode: "serial", timeout: 180000 });
 // Configures the widget with a REAL read-only connector action and asserts it
 // runs against the live box and renders a table — and that a WIDE table scrolls
 // INSIDE the widget instead of overflowing the page (customer fix #3). Defaults
-// target the FortiGate `get_addresses` op on the 10.99.249.205 box; override via
+// target the FortiGate `get_addresses` op on the test box; override via
 // env for another box/connector. Skips unless a config id is supplied (it's
 // box-specific) — keeps the suite green on boxes without that connector.
 const FG = {
@@ -185,7 +185,7 @@ const RUN_TABLE = RUN_LIVE && !!FG.configId;
 // Configures the widget with a kind:"playbook", triggerType:"manual" source and
 // asserts the view panel actually FIRES the playbook via /api/triggers/1/
 // notrigger/<uuid> (NOT the action endpoint) and renders its output. This is the
-// user-reported case: a generic playbook ("query critical" on 205), not a record-
+// user-reported case: a generic playbook ("query critical" on the test box), not a record-
 // scoped action trigger. Defaults to "query critical" (uuid below — confirmed
 // safe to run repeatedly: it queries uptime + sets vars, no mutation). Override
 // via AR_PLAYBOOK_UUID. Runs under FSRPB_LIVE_UI=1 / E2E_LIVE=1 since it executes

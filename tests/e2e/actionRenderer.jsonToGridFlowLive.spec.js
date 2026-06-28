@@ -20,7 +20,7 @@
  * the box server-side with its own token, so there is no WAF/UA concern.
  *
  *   cd fortisoar-widget-harness
- *   make test-ar-jtg-flow-live          # exports .env.box (205) + runs this spec
+ *   make test-ar-jtg-flow-live          # exports .env.box (the test box) + runs this spec
  */
 
 const { test, expect } = require("@playwright/test");

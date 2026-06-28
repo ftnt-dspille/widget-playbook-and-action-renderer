@@ -20,14 +20,14 @@
  * the real Application Editor. THIS spec therefore proves the part the harness
  * shell CAN prove against real box data: the "Show all" branch (plain
  * /api/workflows/actions $resource — the actual customer fix #4) loads the full
- * global action-trigger list and the dropdown renders + filters it. On 205 at
+ * global action-trigger list and the dropdown renders + filters it. On the test box at
  * authoring time that list is 210 playbooks (vs alerts-scoped 44), so we assert
  * the count is far larger than any single module's set rather than a hard number,
  * to survive content drift.
  *
  * Gated: the "Live" in the filename means playwright.config's testIgnore excludes
  * it unless E2E_LIVE=1 (which also sets FSR_HERMETIC=0 so the proxy reaches the
- * box). Point the harness at the box that HAS the playbooks (205):
+ * box). Point the harness at the box that HAS the playbooks (the test box):
  *
  *   cd fortisoar-widget-harness
  *   make test-ar-playbook-live            # exports .env.box + runs this spec
@@ -43,7 +43,7 @@
 
 const { test, expect } = require("@playwright/test");
 
-// A real alert that exists on the 205 box (records are box-specific; override
+// A real alert that exists on the test box (records are box-specific; override
 // via AR_ALERT_UUID). The module-scoped path needs a live record for entity.module.
 const ALERT_UUID = process.env.AR_ALERT_UUID || "92f37901-8edd-48f7-9fb5-2c920d06ae21";
 
@@ -186,7 +186,7 @@ test.describe("live: action-renderer edit — playbook listing + Show all", () =
     expect(all, "scope after Show all").toBeTruthy();
     expect(all.showAll, "Show all should be ON").toBe(true);
     console.log(`[ar-pb-live] show-all count = ${all.count}`);
-    // "Show all" now lists EVERY active triggerable playbook (~691 on 205) —
+    // "Show all" now lists EVERY active triggerable playbook (~691 on the test box) —
     // action AND generic/referenced/manual — not just the record-context action
     // triggers (~210). A threshold of 250 proves the list is broadened past the
     // action-only set, while tolerating box content drift.
@@ -220,7 +220,7 @@ test.describe("live: action-renderer edit — playbook listing + Show all", () =
     // step-derived fallback (playbookService is unavailable here) — against the
     // live /api/workflows/actions step shapes, which is the whole point.
     // Pick a known playbook that HAS input variables — "Action - Domain - Block
-    // (Indicator)" is a stable action trigger on 205 — so we deterministically
+    // (Indicator)" is a stable action trigger on the test box — so we deterministically
     // exercise the param-row path. onPlaybookPicked is async (the lightweight
     // list has no step bodies → it fetches the picked playbook's trigger step),
     // so we await its promise. Falls back to any action playbook if that name
@@ -271,13 +271,13 @@ test.describe("live: action-renderer edit — playbook listing + Show all", () =
     // ── GENERIC playbook proof: the list now includes manual/Start-trigger ───
     // playbooks (not just record-action ones), and picking one yields a manual
     // triggerType with NO route. "query critical" is a generic Start-trigger
-    // playbook on 205; assert it's present + picks as manual. (This is the user-
+    // playbook on the test box; assert it's present + picks as manual. (This is the user-
     // reported requirement: generic playbooks, not just alert manual playbooks.)
     const generic = await page.evaluate(() => {
       const sc = window.angular.element(document.querySelector("#edit-modal-body form")).scope();
       // The lightweight list has no step bodies, so we can't pre-filter by
       // trigger args here — pick "query critical" (a known generic Start-trigger
-      // playbook on 205) by name and let onPlaybookPicked fetch + classify it.
+      // playbook on the test box) by name and let onPlaybookPicked fetch + classify it.
       const qc = (sc.playbooks || []).find((p) => /query critical/i.test(p.name || ""));
       if (!qc) return { found: false, qcPresent: false, listCount: (sc.playbooks || []).length };
       sc.picks.playbookPicked = qc;
