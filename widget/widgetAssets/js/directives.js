@@ -232,6 +232,38 @@
     };
   }
 
+  // Clicking a picker's <label> should drop the cursor into that picker's
+  // ui-select search field (native <label for=> can't target ui-select's
+  // generated search input). On click we find the ui-select toggle inside the
+  // same .form-group and click it — ui-select opens and auto-focuses its search.
+  function actionRendererPickerLabelDirective() {
+    return {
+      restrict: "A",
+      link: function (scope, element) {
+        element.css("cursor", "pointer");
+        element.on("click", function () {
+          var group = element[0].closest(".form-group");
+          if (!group) return;
+          var container = group.querySelector(".ui-select-container");
+          var toggle = container && container.querySelector(".ui-select-toggle");
+          if (!toggle) return;
+          // Defer to the next tick: the label's own click is still bubbling, and
+          // ui-select's document-level outside-click handler would close the
+          // dropdown we just opened. Letting this event settle first makes the
+          // open stick. Then focus the search (it only exists once open).
+          setTimeout(function () {
+            var isOpen = container.className.indexOf("open") !== -1;
+            if (!isOpen) toggle.click();
+            setTimeout(function () {
+              var search = group.querySelector(".ui-select-search");
+              if (search) search.focus();
+            }, 0);
+          }, 0);
+        });
+      },
+    };
+  }
+
   // Guard against duplicate registration when the script is loaded by multiple
   // instances of the widget on the same page. Angular doesn't error on
   // re-register, but the duplicate work is wasted.
@@ -240,6 +272,7 @@
     angular
       .module("cybersponse")
       .directive("actionRendererHtmlPreview", actionRendererHtmlPreviewDirective)
-      .directive("actionRendererJinjaPane", actionRendererJinjaPaneDirective);
+      .directive("actionRendererJinjaPane", actionRendererJinjaPaneDirective)
+      .directive("actionRendererPickerLabel", actionRendererPickerLabelDirective);
   }
 })();

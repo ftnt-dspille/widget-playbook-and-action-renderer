@@ -39,6 +39,17 @@
 
 .action-renderer-body {
   min-height: 320px;
+  /* SOAR's "Edit widget config" modal is a fixed flex column
+     (header + body + Cancel/Save footer). Because we ship our own
+     .modal-body wrapped in a <form>, the platform's flex height chain
+     doesn't reach it: on a tall step (Output) the body grows unbounded,
+     the whole modal exceeds the viewport, and the platform Save/Cancel
+     footer is pushed off the bottom edge (no visible Save button).
+     Cap the body so it scrolls internally and the footer stays in view.
+     (Output-step dropdowns are native <select>, so overflow can't clip a
+     ui-select popup here.) */
+  max-height: calc(100vh - 240px);
+  overflow-y: auto;
 }
 
 /* cs-field inputs inside the cs-connector-field-renderer occasionally render
@@ -304,17 +315,46 @@ body.theme-light .action-renderer-table-wrap.action-renderer-table-sticky thead 
   line-height: 1.4;
   text-align: left;
 }
+/* Lay the match text out as a plain block with inline children, NOT a flex row.
+   ui-select-bootstrap (or SOAR's theme) gave the match-text's flex children
+   equal grow, so the label and the "v5.4.0" meta each stretched to ~half the
+   control and the version drifted far to the right; worse, shrinking the label
+   to keep them together clipped the name to nothing. Inline flow keeps
+   "Fortinet FortiGate v5.4.0" on one line, version right after the name, and
+   ellipsizes the whole string as a unit when it's too long. */
 .action-renderer-edit .ui-select-bootstrap .ui-select-match-text {
   float: none;
-  display: inline-flex;
-  align-items: baseline;
+  display: block;
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A ui-select-bootstrap / SOAR theme rule forces the match spans to
+   `display:inline-block; width:~50%`, which is what stretched each child to half
+   the control and shoved the version to the far right (off-screen, ellipsized to
+   "…"). Force inline flow + content width; the !important is needed to beat that
+   themed selector. */
+.action-renderer-edit .ui-select-bootstrap .ui-select-match-text .ar-match-label,
+.action-renderer-edit .ui-select-bootstrap .ui-select-match-text .ar-match-meta {
+  display: inline !important;
+  width: auto !important;
+  float: none !important;
+}
 .action-renderer-edit .ar-match-meta { margin-left: 6px; font-size: 0.9em; }
+
+/* Source toggle (Connector action / Playbook): in SOAR's dark theme `btn-primary`
+   renders DARKER than the idle button, so the selected option reads as recessed
+   rather than highlighted ("doesn't show anything after clicking it"). Force a
+   clear accent so the active source is obvious. */
+.action-renderer-edit .btn-group > .btn.btn-primary,
+.action-renderer-edit .btn-group > .btn.btn-primary:hover,
+.action-renderer-edit .btn-group > .btn.btn-primary:focus {
+  background-color: #337ab7;
+  border-color: #2e6da4;
+  color: #fff;
+}
 .ui-select-bootstrap > .ui-select-choices {
   max-height: 320px;
   overflow-y: auto;

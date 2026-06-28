@@ -13,7 +13,7 @@ angular.module("cybersponse", []); // eslint-disable-line no-undef
 
 require("../widget/edit.controller.js");
 
-const CTRL_NAME = "editActionRendererWidget106DevCtrl";
+const CTRL_NAME = "editActionRendererWidget108DevCtrl";
 
 const ng = window.angular; // eslint-disable-line no-undef
 const ngModule = window.angular.mock.module; // eslint-disable-line no-undef

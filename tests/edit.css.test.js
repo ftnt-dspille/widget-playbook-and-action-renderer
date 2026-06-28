@@ -41,3 +41,36 @@ describe("edit modal — playbook picker stacking", () => {
     expect(decl).toMatch(/z-index:\s*\d+/);
   });
 });
+
+describe("edit modal — source toggle + match-meta layout", () => {
+  test("active source toggle (.btn-primary) gets an explicit accent (dark-theme btn-primary is too dark to read as selected)", () => {
+    const decl = block(".action-renderer-edit .btn-group > .btn.btn-primary");
+    expect(decl).not.toBeNull();
+    expect(decl).toMatch(/background-color:\s*#337ab7/i);
+    expect(decl).toMatch(/color:\s*#fff/i);
+  });
+
+  test("match text flows inline (block container, inline children) so the version hugs the name and the name can't be clipped to nothing", () => {
+    const textDecl = block(".action-renderer-edit .ui-select-bootstrap .ui-select-match-text");
+    expect(textDecl).toMatch(/display:\s*block/);
+    // The match spans are forced back to inline + auto width with !important to
+    // beat the themed inline-block/50%-width rule that drifted the version right.
+    const spanDecl = block(".ui-select-match-text .ar-match-label");
+    expect(spanDecl).toMatch(/display:\s*inline\s*!important/);
+    expect(spanDecl).toMatch(/width:\s*auto\s*!important/);
+  });
+});
+
+describe("edit modal — body height cap keeps the platform Save footer in view", () => {
+  // Regression for "we can't see the Save button on the widget in FortiSOAR":
+  // the widget ships its own .modal-body (.action-renderer-body) wrapped in a
+  // <form>, which breaks SOAR's modal flex height chain. On a tall step (Output)
+  // the body grew unbounded, the modal exceeded the viewport, and the injected
+  // Cancel/Save footer was pushed off the bottom edge. Cap + scroll the body.
+  test(".action-renderer-body caps its height and scrolls internally", () => {
+    const decl = block(".action-renderer-body");
+    expect(decl).not.toBeNull();
+    expect(decl).toMatch(/max-height:/);
+    expect(decl).toMatch(/overflow-y:\s*auto/);
+  });
+});

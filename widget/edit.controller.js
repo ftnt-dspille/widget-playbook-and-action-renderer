@@ -7,8 +7,8 @@
   angular
     .module("cybersponse")
     .controller(
-      "editActionRendererWidget106DevCtrl",
-      editActionRendererWidget106DevCtrl
+      "editActionRendererWidget108DevCtrl",
+      editActionRendererWidget108DevCtrl
     );
 
   // playbookService transitively depends on websocketService -> $stomp ->
@@ -17,7 +17,7 @@
   // instantiating in the harness. We grab it lazily via $injector.get so
   // the connector path still works in the harness even when playbook
   // services are unavailable.
-  editActionRendererWidget106DevCtrl.$inject = [
+  editActionRendererWidget108DevCtrl.$inject = [
     "$scope",
     "$state",
     "$uibModalInstance",
@@ -33,7 +33,7 @@
     "$timeout",
   ];
 
-  function editActionRendererWidget106DevCtrl(
+  function editActionRendererWidget108DevCtrl(
     $scope,
     $state,
     $uibModalInstance,

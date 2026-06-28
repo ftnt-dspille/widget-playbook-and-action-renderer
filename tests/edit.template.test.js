@@ -39,8 +39,22 @@ describe("edit.html — structural integrity", () => {
 
   test("connector picker is a searchable ui-select bound to picks.connectorPicked", () => {
     expect(stripped).toMatch(/<ui-select[^>]*data-ng-model="picks\.connectorPicked"/);
-    expect(stripped).toContain('data-on-select="onConnectorPicked()"');
+    // on-select runs the handler and force-closes the dropdown (SOAR doesn't
+    // always auto-close on pick).
+    expect(stripped).toContain('data-on-select="onConnectorPicked(); $select.close()"');
     // The old plain <select ng-options> must be gone.
     expect(stripped).not.toMatch(/<select[^>]*data-ng-model="picks\.connectorPicked"/);
+  });
+
+  test("every picker dropdown force-closes on select", () => {
+    ["onConnectorPicked", "onOperationPicked", "onPlaybookPicked"].forEach((fn) => {
+      expect(stripped).toContain(`data-on-select="${fn}(); $select.close()"`);
+    });
+  });
+
+  test("each picker label carries the focus-into-search directive", () => {
+    // 3 pickers (connector, operation, playbook) → 3 labelled triggers.
+    const hits = (stripped.match(/data-action-renderer-picker-label=""/g) || []).length;
+    expect(hits).toBe(3);
   });
 });
