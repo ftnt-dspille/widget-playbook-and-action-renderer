@@ -215,6 +215,32 @@ describe("table normalization edges", () => {
 });
 
 // ---------------------------------------------------------------------------
+// applyOutput seam — re-render the held result under a new output config
+// without re-executing the source.
+// ---------------------------------------------------------------------------
+describe("applyOutput re-render seam", () => {
+  test("switches mode and re-renders the held result without re-executing", () => {
+    const exec = jest.fn(() => $q.when({ data: { rows: [{ a: 1 }, { a: 2 }] } }));
+    const { scope } = createCtrl({
+      config: connectorConfig({ output: { mode: "table", table: { rootPath: "rows", mode: "auto" } } }),
+      services: { connectorService: { executeConnectorAction: exec } },
+    });
+    scope.refresh();
+    flush();
+    expect(exec).toHaveBeenCalledTimes(1);
+    expect(scope.outputMode).toBe("table");
+    expect(scope.tableRows.length).toBe(2);
+
+    // Switch to raw and re-render the SAME result — no second execute.
+    scope.config.output.mode = "raw";
+    scope.applyOutput();
+    expect(scope.outputMode).toBe("raw");
+    expect(scope.resultJsonText).toContain('"a": 1');
+    expect(exec).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Raw mode
 // ---------------------------------------------------------------------------
 describe("raw output mode", () => {

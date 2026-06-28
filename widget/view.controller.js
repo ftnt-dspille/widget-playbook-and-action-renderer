@@ -381,6 +381,15 @@
 
     $scope.refresh = execute;
 
+    // Re-run the output postprocess against the current $scope.result without
+    // re-executing the source. Exposed so callers (and render tests) can switch
+    // output mode/style and re-render a held result; also handy for a manual
+    // "re-render" after editing output config in place.
+    $scope.applyOutput = function () {
+      $scope.outputMode = ($scope.config.output && $scope.config.output.mode) || "raw";
+      postProcessOutput();
+    };
+
     // ------- Init ---------------------------------------------------------
     function _init() {
       // autoExecute defaults to true; respect false to require manual click.
