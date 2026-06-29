@@ -2,7 +2,7 @@
   "name": "actionRendererWidget",
   "title": "Action Renderer",
   "subTitle": "Run a connector action or playbook with Jinja-templated params and render the output as raw JSON, a table, or a Jinja template.",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "published_date": 1745280000,
   "releaseNotes": "Initial release",
   "development": true,

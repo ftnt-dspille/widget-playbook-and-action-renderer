@@ -15,10 +15,10 @@ async function seedHarness(page) {
     localStorage.setItem("harness.id", uuid);
     localStorage.setItem("harness.ctx", "dashboard");
     const cur = JSON.parse(localStorage.getItem("harness.currentWidget") || "null");
-    if (!cur || cur.id !== "actionRendererWidget-1.0.8") {
-      localStorage.setItem("harness.currentWidget", JSON.stringify({ id: "actionRendererWidget-1.0.8" }));
+    if (!cur || cur.id !== "actionRendererWidget-1.0.9") {
+      localStorage.setItem("harness.currentWidget", JSON.stringify({ id: "actionRendererWidget-1.0.9" }));
     }
-    localStorage.removeItem("harness.widgetConfig.actionRendererWidget-1.0.8");
+    localStorage.removeItem("harness.widgetConfig.actionRendererWidget-1.0.9");
   }, ALERT_UUID);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => !!window.__HARNESS_RECORD, { timeout: 20000 });
